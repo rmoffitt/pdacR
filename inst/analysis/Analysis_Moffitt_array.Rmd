@@ -1,0 +1,411 @@
+---
+title: "PDAC gene expression analysis"
+author: "Richard Moffitt"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+# Setup
+## load required libraries
+```{r setup, warning=F, echo=F}
+library(pdacR)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+library(pROC)
+library(pdacmolgrad)
+library(plyr)
+```
+
+## Preprocessing of genesets
+```{r, echo=F}
+dataset <- Moffitt_GEO_array
+
+## Calculate signature scores and SSC
+# =====================================================================
+# perform single sample classifier for guidance
+
+tumor.classifier <- Moffitt_classifier_2019
+
+dataset$sampInfo$SST_subtypes<- as.numeric(create.classif(dat=dataset$ex,
+                                              fit=tumor.classifier$fit,
+                                              classifier=tumor.classifier)$predprob)
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+
+
+# =====================================================================
+# Calculate expression scores
+for(i in names(gene_lists)){
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  tmp <- which(dataset$featInfo$SYMBOL %in% this_gene_list)
+  dataset$sampInfo[i] <- colMeans((dataset$ex[tmp,]),na.rm = TRUE)
+}
+
+
+
+
+# =====================================================================
+# Make utility tracks
+dataset$sampInfo$combined <- paste(dataset$sampInfo$location,
+                                   dataset$sampInfo$specimen_type)
+
+dataset$sampInfo$simpleLocation <- as.character(dataset$sampInfo$location)
+dataset$sampInfo$simpleLocation[dataset$sampInfo$specimen_type %in% "cell line"] <- "plastic"
+dataset$sampInfo$simpleLocation[dataset$sampInfo$location %in% 
+                                  c("AbWall","Duo","Colon","Peritoneal",
+                                    "Diaphragm","Fat","PelvicWall","Vessel")] <- "Peritoneal/GI"
+dataset$sampInfo$simpleLocation[dataset$sampInfo$location %in% 
+                                  c("Spleen","LymphNode")] <- "Spleen/LN"
+# print(unique(dataset$sampInfo$simpleLocation))
+
+# =====================================================================
+# Append purIST and molgrad predictions
+temp <- projectMolGrad(dataset$ex,
+                       geneSymbols = dataset$featInfo$SYMBOL)
+names(temp) <- paste0('molgrad_', names(temp))
+temp$geo_accession <- rownames(temp)
+# print(head(temp))
+
+dataset$sampInfo <- join(dataset$sampInfo,
+                         temp,
+                         by = 'geo_accession')
+rownames(dataset$ex) <- dataset$featInfo$SYMBOL
+dataset$sampInfo$purIST <- as.numeric(create.classif(dataset$ex,
+                                                     Moffitt_classifier_2019,
+                                                     fit = Moffitt_classifier_2019$fit)$predprob)
+dataset$sampInfo$molgrad_scaled <- GGally::rescale01(dataset$sampInfo$molgrad_PDX)
+
+# =====================================================================
+# Identify sample subsets
+pt_with_primary <-  unique(dataset$sampInfo$ptIndex[
+  dataset$sampInfo$specimen_type %in% "Primary"])
+pt_with_met <-  unique(dataset$sampInfo$ptIndex[
+  dataset$sampInfo$specimen_type %in% "Metastasis"])
+pt_with_both <- intersect(pt_with_primary,pt_with_met)
+
+
+```
+
+## Match samples from same source
+```{r, echo=F}
+data <- droplevels(subset(dataset$sampInfo,ptIndex %in% pt_with_both))
+# print(names(data))
+
+# Manually order patient indices for nice plotting
+data$ptIndex_f <- factor(data$ptIndex, levels = c("171", "176", "184", "181", "172", "183", "8", "13", "12", "14"))
+```
+
+# Results
+## Exocrine signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = Collisson.Exocrine,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8, aes(reorder(combined, Collisson.Exocrine)))  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+
+```
+
+## QM signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = Collisson.QM,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8)  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+```
+
+## Collisson Classical signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = Collisson.Classical,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8)  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+```
+
+## ADEX signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = ICGC.ADEX.Up,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8)  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+```
+
+## Immunogenic signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = ICGC.Immunogenic.Up,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8)  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+```
+
+## Basal-like signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = Moffitt.Basal.25,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8)  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+```
+
+## Classical signature by matched samples
+```{r,fig.width=8,fig.height=5, echo=F}
+ggplot(data,aes(y = Moffitt.Classical.25,
+                x = combined,
+                shape = specimen_type,
+                fill = simpleLocation)) +
+  geom_point(size=3,alpha=0.8)  +
+  facet_grid(. ~ ptIndex_f) +
+  theme_pubr() +
+  scale_shape_manual(values = c(21,22,24)) +
+  scale_fill_manual(values = c("Lung" = "#B79F00",
+                               "Liver" = "#F8766D",
+                               "Pancreas" = "#619CFF",
+                               "Peritoneal/GI" = "#00BFC4",
+                               "Spleen/LN" = "#F564E3")) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  labs(title = "Expression in matched samples from Moffitt Array data",
+       x = "Patient ID")
+```
+
+## Simplified patient matched sample plots
+```{r, fig.height=6, fig.width=6, echo=F}
+
+good_samples <- which(data$ptIndex_f %in% c("8", "12", "13", "14"))
+metastasis <- which((data$specimen_type %in% "Metastasis") & (!data$simpleLocation %in% "Pancreas"))
+adjacent_normal <- which((data$specimen_type %in% "Normal") & (!data$simpleLocation %in% "Pancreas"))
+normal <- which((data$specimen_type %in% "Normal") & (data$simpleLocation %in% "Pancreas"))
+primary <- which((data$specimen_type %in% "Primary") & (data$simpleLocation %in% "Pancreas"))
+
+data$simplefactor <- character(nrow(data))
+data$simplefactor[metastasis] <- "Metastasis"
+data$simplefactor[adjacent_normal] <- "Adj.normal"
+data$simplefactor[normal] <- "Normal"
+data$simplefactor[primary] <- "Primary"
+data$simplefactor <- as.factor(data$simplefactor)
+
+levels(data$simplefactor) <- c("Metastasis", "Adj.normal", "Normal", "Primary")
+
+for(genes in noquote(c(names(gene_lists),
+                       "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"))){
+  
+  d <- data.frame(score = scale(data[good_samples, genes],
+                                center = TRUE,
+                                scale = TRUE),
+                  location = data$simplefactor[good_samples],
+                  type = data$specimen_type[good_samples])
+  
+  p <- ggplot(d, aes(y = score,
+                     x = location)) +
+    geom_dotplot(aes(fill = location),
+                 binaxis='y', 
+                 stackdir='center', 
+                 binwidth = 0.115,
+                 dotsize=1.25) +
+    stat_compare_means(ref.group = "Primary") +
+    ylim(-2,4) +
+    
+    labs(title = paste(genes, " score")) +
+    theme_pubr()
+
+
+  print(p)
+
+}
+
+```
+
+## Simplified patient matched sample plots, all samples
+```{r, fig.height=6, fig.width=6, echo=F}
+
+metastasis <- which((dataset$sampInfo$specimen_type %in% "Metastasis") & (!dataset$sampInfo$simpleLocation %in% "Pancreas"))
+adjacent_normal <- which((dataset$sampInfo$specimen_type %in% "Normal") & (!dataset$sampInfo$simpleLocation %in% "Pancreas"))
+normal <- which((dataset$sampInfo$specimen_type %in% "Normal") & (dataset$sampInfo$simpleLocation %in% "Pancreas"))
+primary <- which((dataset$sampInfo$specimen_type %in% "Primary") & (dataset$sampInfo$simpleLocation %in% "Pancreas"))
+
+
+dataset$sampInfo$simplefactor <- character(nrow(dataset$sampInfo))
+dataset$sampInfo$simplefactor[metastasis] <- "Metastasis"
+dataset$sampInfo$simplefactor[adjacent_normal] <- "Adj.normal"
+dataset$sampInfo$simplefactor[normal] <- "Normal"
+dataset$sampInfo$simplefactor[primary] <- "Primary"
+dataset$sampInfo$simplefactor[which(dataset$sampInfo$specimen_type %in% "cell line")] <- "Cell line"
+dataset$sampInfo$simplefactor <- as.factor(dataset$sampInfo$simplefactor)
+
+
+dataset$sampInfo$simplefactor <- factor(dataset$sampInfo$simplefactor,
+                                        levels = c("Cell line", "Metastasis", "Adj.normal", "Normal", "Primary"))
+
+dataset$sampInfo$normal_lung_adex <- character(length = nrow(dataset$sampInfo))
+dataset$sampInfo$normal_lung_adex[which(dataset$sampInfo$UNC_MADB_ID %in% "48607")] <- "yes"
+dataset$sampInfo$normal_lung_adex <- as.factor(dataset$sampInfo$normal_lung_adex)
+
+noscale <- c("molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled")
+
+
+for(genes in noquote(c(names(gene_lists),
+                       "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"))){
+  if(genes %in% noscale){
+    d <- data.frame(score = dataset$sampInfo[, genes],
+                  location = dataset$sampInfo$simpleLocation,
+                  type = dataset$sampInfo$simplefactor,
+                  outlier = dataset$sampInfo$normal_lung_adex)
+  
+  p <- ggplot(d, aes(y = score,
+                     x = type)) +
+    geom_dotplot(aes(fill = location),
+                 binaxis='y', 
+                 stackdir='center', 
+                 binwidth = 0.05,
+                 dotsize=0.45,
+                 method = 'histodot',
+                 position = position_dodge(1)) +
+    geom_text_repel(data = subset(d, outlier %in% "yes"),
+                    aes(label = outlier)) +
+    stat_compare_means(ref.group = "Primary") +
+    labs(title = paste(genes, " score")) +
+    theme_pubr()
+     
+  print(p)
+
+    
+  }else{
+    d <- data.frame(score = scale(dataset$sampInfo[, genes],
+                                center = TRUE,
+                                scale = TRUE),
+                  location = dataset$sampInfo$simpleLocation,
+                  type = dataset$sampInfo$simplefactor,
+                  outlier = dataset$sampInfo$normal_lung_adex)
+  
+  p <- ggplot(d, aes(y = score,
+                     x = type)) +
+    geom_dotplot(aes(fill = location),
+                 binaxis='y', 
+                 stackdir='center', 
+                 binwidth = 0.05,
+                 dotsize=1.5,
+                 method = 'histodot',
+                 position = position_dodge(1)) +
+    geom_text_repel(data = subset(d, outlier %in% "yes"),
+                    aes(label = outlier)) +
+    stat_compare_means(ref.group = "Primary") +
+    ylim(-3,4) +
+    labs(title = paste(genes, " score")) +
+    theme_pubr()
+
+
+  print(p)
+  }
+}
+
+
+```
+

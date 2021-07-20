@@ -1,0 +1,460 @@
+---
+title: "Gene expression analysis in Puleo seq"
+author: "Ryan Kawalerski"
+date: "May 3, 2019"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+  
+---
+
+```{r setup, include=FALSE, echo=F}
+library(pdacR)
+library(ggplot2)
+library(ggpubr)
+library(GGally)
+library(pdacmolgrad)
+library(plyr)
+```
+
+# Assign dataset and remove nonvariant genes
+```{r, echo=F,  message=FALSE, results='hide', warning=F}
+
+dataset <- Puleo_array
+
+geneMeans <- rowMeans(dataset$ex)
+genesToDelete <- which(geneMeans < .01) # there are none
+
+dataset$ex <- log2(1+dataset$ex)
+gene_lists <- pdacR::gene_lists
+
+```
+
+
+# Add genesets to dataset sample info
+```{r, echo = FALSE,  message=FALSE, results='hide'}
+# =====================================================================
+# perform single sample classifier for guidance
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+# =====================================================================
+# Calculate expression scores
+for(i in names(gene_lists)){
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  tmp <- which(dataset$featInfo$SYMBOL %in% this_gene_list)
+  dataset$sampInfo[i] <- colMeans((dataset$ex[tmp,]),na.rm = TRUE)
+}
+
+temp <- projectMolGrad(dataset$ex,
+                       geneSymbols = dataset$featInfo$SYMBOL,
+                       normalize = 'raw')
+names(temp) <- paste0('molgrad_', names(temp))
+temp$Sample.name <- rownames(temp)
+print(head(temp))
+
+
+dataset$sampInfo <- join(dataset$sampInfo,
+                         temp,
+                         by = 'Sample.name')
+rownames(dataset$ex) <- pdacR::Puleo_array$featInfo$SYMBOL
+dataset$sampInfo$purIST <- as.numeric(create.classif(dataset$ex,
+                                                     Moffitt_classifier_2019,
+                                                     fit = Moffitt_classifier_2019$fit)$predprob)
+dataset$sampInfo$molgrad_scaled <- GGally::rescale01(dataset$sampInfo$molgrad_PDX)
+
+```
+
+# Consensus clustering
+## Collisson subtypes
+```{r, fig.width=4, fig.height=4, echo = FALSE, include = FALSE}
+sampleset <- 1:nrow(dataset$sampInfo)
+tmp.k <- 3
+tmp.ncusts <- 3
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Collisson.Classical),
+                        as.character(pdacR::gene_lists$Collisson.Exocrine),
+                        as.character(pdacR::gene_lists$Collisson.QM)))
+
+smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+
+sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+                                                         seed = 1234,
+                                                         pFeature = 0.8,
+                                                         pItem = 0.8,
+                                                         maxK = 6,
+                                                         reps=200,
+                                                         distance="pearson",
+                                                         clusterAlg="km")[[tmp.k]]$consensusTree
+
+tmp.cluster <- c("classical","qm", "exocrine")[cutree(tree = sampletree, k = 3)]
+dataset$sampInfo$collissonTumor <- NA
+dataset$sampInfo$collissonTumor[sampleset] <- tmp.cluster
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("collissonTumor",
+                                  "Average.VAF",
+                                                 "Sample.name"),
+                                colorlists = list(c("blue", "purple", "orange"),
+                                  c("white", "yellow", "black"),
+                                                  c("white","red","yellow","green","blue")),
+                                drop.levels = TRUE)
+
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(classical =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$Collisson.Classical,
+                                                      exocrine =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$Collisson.Exocrine,
+                                                      qm =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$Collisson.QM),
+                                sampleTracks = c("classical",
+                                                 "exocrine",
+                                                 "qm"),
+                                colorlists = list(c=c("white","blue"),
+                                                  e=c("white","purple"),
+                                                  q=c("white", "orange")))
+
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE}
+heatmap.3(x = smallx,
+          scale="row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = as.dendrogram(sampletree),
+          Rowv = TRUE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+
+```
+
+## Bailey subtypes
+```{r, fig.width=4, fig.height=4, echo = FALSE, include = FALSE}
+sampleset <- 1:nrow(dataset$sampInfo)
+tmp.k <- 4
+tmp.ncusts <- 4
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(gene_lists$ADEX_unique),
+                        as.character(gene_lists$Progenitor_unique),
+                        as.character(gene_lists$Squamous_unique),
+                        as.character(gene_lists$Immunogenic_unique)))
+
+smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+
+sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+                                                         seed = 1234,
+                                                         pFeature = 0.8,
+                                                         pItem = 0.8,
+                                                         maxK = 6,
+                                                         reps=200,
+                                                         distance="pearson",
+                                                         clusterAlg="km")[[tmp.k]]$consensusTree
+
+tmp.cluster <- c("progenitor","ADEX", "squamous", "immunogenic")[cutree(tree = sampletree, k = 4)]
+dataset$sampInfo$BaileyTumor <- NA
+dataset$sampInfo$BaileyTumor[sampleset] <- tmp.cluster
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("BaileyTumor",
+                                  "Average.VAF",
+                                                 "Sample.name"),
+                                colorlists = list(c("purple", "hotpink", "blue", "brown"),
+                                  c("white", "yellow", "black"),
+                                                  c("white","red","yellow","green","blue")),
+                                drop.levels = TRUE)
+
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(ADEX =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        gene_lists$ADEX_unique,
+                                                      progenitor =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        gene_lists$Progenitor_unique,
+                                                      squamous =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        gene_lists$Squamous_unique,
+                                                      immunogenic = dataset$featInfo$SYMBOL[featureset] %in%
+                                                        gene_lists$Immunogenic_unique),
+                                sampleTracks = c("ADEX",
+                                                 "progenitor",
+                                                 "squamous",
+                                                 "immunogenic"),
+                                colorlists = list(A=c("white","purple"),
+                                                  p=c("white","blue"),
+                                                  s=c("white", "brown"),
+                                                  i = c("white", "hotpink")))
+
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE}
+heatmap.3(x = smallx,
+          scale="row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = as.dendrogram(sampletree),
+          Rowv = TRUE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+
+```
+
+## Moffitt subtypes
+```{r, fig.width=4, fig.height=4, echo = FALSE, include = FALSE}
+sampleset <- 1:nrow(dataset$sampInfo)
+tmp.k <- 2
+tmp.ncusts <- 2
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Classical.25),
+                        as.character(pdacR::gene_lists$Moffitt.Basal.25)))
+
+smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+
+sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+                                                         seed = 1234,
+                                                         pFeature = 0.8,
+                                                         pItem = 0.8,
+                                                         maxK = 6,
+                                                         reps=200,
+                                                         distance="pearson",
+                                                         clusterAlg="km")[[tmp.k]]$consensusTree
+
+tmp.cluster <- c("basal","classical")[cutree(tree = sampletree, k = 2)]
+dataset$sampInfo$MoffittTumor <- NA
+dataset$sampInfo$MoffittTumor[sampleset] <- tmp.cluster
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("MoffittTumor",
+                                  "Average.VAF",
+                                                 "Sample.name"),
+                                colorlists = list(c("orange", "blue"),
+                                  c("white", "yellow", "black"),
+                                                  c("white","red","yellow","green","blue")),
+                                drop.levels = TRUE)
+
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(classical =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$Moffitt.Classical.25,
+                                                      basal =dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$Moffitt.Basal.25),
+                                sampleTracks = c("classical",
+                                                 "basal"),
+                                colorlists = list(c=c("white","blue"),
+                                                  b=c("white","orange")))
+
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE}
+heatmap.3(x = smallx,
+          scale="row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = as.dendrogram(sampletree),
+          Rowv = TRUE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+
+```
+
+# Gene signature expression by purity and subtypes
+## Signatures and average VAF colored by Bailey subtypes
+```{r,fig.width=8,fig.height=5, echo=FALSE,  message=FALSE, warning=F}
+list.of.gene.lists <- c("ICGC.ADEX.Up",
+                        "ICGC.Immunogenic.Up",
+                        "Collisson.Exocrine",
+                        "Collisson.QM",
+                        "ICGC.Squamous.Up",
+                        "Moffitt.Basal.25",
+                        "ADEX_unique",
+                        "Squamous_unique",
+                        "Progenitor_unique",
+                        "Immunogenic_unique",
+                        "Notta.BasalA",
+                        "Notta.BasalB",
+                        "Notta.ClassicalA",
+                        "Notta.ClassicalB",
+                        "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"
+                        )
+for(gene.list in list.of.gene.lists){
+  dat = dataset$sampInfo
+  p <- ggplot(data = dat,
+              aes(x = Average.VAF ,
+                  y = dat[[gene.list]])
+  ) +
+    geom_point(alpha = 0.5, size = 3,
+               shape = 21,
+               aes(fill = BaileyTumor)
+    )+
+   
+    labs(title = "Puleo RNAseq samples",
+         color='Subtype') +
+    xlab("Average VAF") +
+    ylab(gene.list)+
+    theme_pubr() + 
+    theme(aspect.ratio = 1) +
+    #geom_smooth(method='lm',color="black")+
+    scale_fill_manual(values = c("squamous" = "orangered",
+                                   "immunogenic" = "darkred",
+                                   "progenitor" = "navy",
+                                   "ADEX" = "hotpink"))
+  print(p)  
+  
+
+  print(round(cor.test(dat$Average.VAF, dat[[gene.list]])[4][[1]][[1]],5))
+  print(round(cor.test(dat$Average.VAF, dat[[gene.list]])[3][[1]],8))
+}
+
+```
+
+## Signatures and average VAF colored by Collisson subtypes
+```{r,fig.width=8,fig.height=5, echo=FALSE, message=FALSE, warning=F}
+list.of.gene.lists <- c("ICGC.ADEX.Up",
+                        "ICGC.Immunogenic.Up",
+                        "Collisson.Exocrine",
+                        "Collisson.QM",
+                        "ICGC.Squamous.Up",
+                        "Moffitt.Basal.25",
+                        "ADEX_unique",
+                        "Squamous_unique",
+                        "Progenitor_unique",
+                        "Immunogenic_unique",
+                        "Notta.BasalA",
+                        "Notta.BasalB",
+                        "Notta.ClassicalA",
+                        "Notta.ClassicalB",
+                        "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"
+                        )
+for(gene.list in list.of.gene.lists){
+  dat = dataset$sampInfo
+  p <- ggplot(data = dat,
+              aes(x = Average.VAF ,
+                  y = dat[[gene.list]])
+  ) +
+    geom_point(alpha = 0.5, size = 3,
+               shape = 21,
+               aes(fill = collissonTumor)
+    )+
+   
+    labs(title = "Puleo RNAseq samples",
+         color='Subtype') +
+    xlab("Average VAF") +
+    ylab(gene.list)+
+    theme_pubr() + 
+    theme(aspect.ratio = 1) +
+    #geom_smooth(method='lm',color="black")+
+    scale_fill_manual(values = c("classical" = "blue",
+                                   "exocrine" = "purple",
+                                   "qm" = "orange"))
+  print(p)  
+  
+
+  print(round(cor.test(dat$Average.VAF, dat[[gene.list]])[4][[1]][[1]],5))
+  print(round(cor.test(dat$Average.VAF, dat[[gene.list]])[3][[1]],8))
+}
+
+```
+
+## Signatures and average VAF colored by Moffitt subtypes
+```{r,fig.width=8,fig.height=5, echo=FALSE,  message=FALSE, warning=F}
+list.of.gene.lists <- c("ICGC.ADEX.Up",
+                        "ICGC.Immunogenic.Up",
+                        "Collisson.Exocrine",
+                        "Collisson.QM",
+                        "ICGC.Squamous.Up",
+                        "Moffitt.Basal.25",
+                        "ADEX_unique",
+                        "Squamous_unique",
+                        "Progenitor_unique",
+                        "Immunogenic_unique",
+                        "Notta.BasalA",
+                        "Notta.BasalB",
+                        "Notta.ClassicalA",
+                        "Notta.ClassicalB",
+                        "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"
+                        )
+for(gene.list in list.of.gene.lists){
+  
+  if(gene.list %in% 'purIST'){
+      ylimit = ylim(0,1)
+    } else if(gene.list %in% c('molgrad_PDX')){
+      ylimit = ylim(-0.15,0.25)
+    } else{
+      ylimit = ylim(min(dat[[gene.list]]),
+                    max(dat[[gene.list]]))
+    }
+  dat = dataset$sampInfo
+  p <- ggplot(data = dat,
+              aes(x = Average.VAF ,
+                  y = dat[[gene.list]])
+  ) +
+    geom_point(alpha = 0.5, size = 3,
+               shape = 21,
+               aes(fill = MoffittTumor)
+    )+
+   
+    labs(title = "Puleo RNAseq samples",
+         color='Subtype') +
+    xlab("Average VAF") +
+    ylab(gene.list)+
+    theme_pubr() + 
+    ylimit +
+    theme(aspect.ratio = 1) +
+    #geom_smooth(method='lm',color="black")+
+    scale_fill_manual(values = c("classical" = "blue",
+                                   "basal" = "orange"))
+  print(p)  
+  
+
+  print(round(cor.test(dat$Average.VAF, dat[[gene.list]])[4][[1]][[1]],5))
+  print(round(cor.test(dat$Average.VAF, dat[[gene.list]])[3][[1]],8))
+}
+
+```

@@ -1,0 +1,295 @@
+---
+title: "PDAC gene expression analysis"
+author: "Richard Moffitt, Ryan Kawalerski"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+# Setup
+## load required libraries
+
+```{r, include=F}
+library(pdacR)
+library(ggplot2)
+library(ggpubr)
+library(plyr)
+library(ggrepel)
+library(pROC)
+library(scales)
+library(pdacmolgrad)
+```
+
+# Results
+## Popular signatures in matched samples
+```{r,fig.width=8,fig.height=5, echo = F, warning=F}
+seq <- pdacR::PACA_AU_seq
+array <- pdacR::PACA_AU_array
+
+matched_samples <-  intersect(seq$sampInfo$submitted_donor_id,
+                              array$sampInfo$submitted_donor_id)
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+for(i in names(gene_lists)){
+  
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+    tmpseq <- which(seq$featInfo$SYMBOL %in% this_gene_list)
+    tmparray <- which(array$featInfo$SYMBOL %in% this_gene_list)
+    
+    seq$sampInfo[i] <- colMeans(log2(1+ seq$ex[tmpseq,]), na.rm = T)
+    array$sampInfo[i] <- colMeans(array$ex[tmparray,], na.rm = T)
+}
+
+# molgrad/purIST for seq
+df = as.data.frame(seq$ex)
+colnames(df) = seq$sampInfo$submitted_donor_id
+df$sym = seq$featInfo$SYMBOL
+df2 = aggregate(df[-which(names(df) == "sym")],
+                list(as.character(df$sym)),
+                sum)
+rownames(df2) = df2$Group.1
+df2 = df2[-1]
+temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2), normalize = 'raw')
+names(temp) <- paste0("molgrad_",names(temp))
+temp$submitted_donor_id = rownames(temp)
+seq$sampInfo = dplyr::full_join(seq$sampInfo,
+                                temp, by = 'submitted_donor_id')
+seq$sampInfo = seq$sampInfo[-which(seq$sampInfo$submitted_donor_id == "ICGC_0099.1"),]
+seq$sampInfo$molgrad_scaled <- GGally::rescale01(seq$sampInfo$molgrad_PDX)
+seq$sampInfo$purIST <- as.numeric(create.classif(df2,
+                                            Moffitt_classifier_2019,
+                                            fit = Moffitt_classifier_2019$fit)$predprob)
+
+# molgrad/purIST for array
+df = array$ex #%>% t %>% scale(scale = F) %>% t
+colnames(df) = array$sampInfo$submitted_donor_id
+df$sym = array$featInfo$SYMBOL
+df2 = aggregate(df[-which(names(df) == "sym")],
+                list(as.character(df$sym)),
+                sum)
+rownames(df2) = df2$Group.1
+df2 = df2[-1]
+temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2), normalize = 'raw')
+
+#temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2))
+names(temp) <- paste0("molgrad_",names(temp))
+temp$submitted_donor_id = rownames(temp)
+
+# temp[which(rownames(temp) %in% c('ICGC_0543','ICGC_0521','ICGC_0522','ICGC_0535')),]
+# 
+# df = as.data.frame(PACA_AU_array$ex)
+# colnames(df) = PACA_AU_array$sampInfo$submitted_donor_id
+# df$sym = PACA_AU_array$featInfo$SYMBOL
+# df2 = aggregate(df[-which(names(df) == "sym")],
+#                 list(as.character(df$sym)),
+#                 sum)
+# rownames(df2) = df2$Group.1
+# df2 = df2[-1]
+array$sampInfo = dplyr::full_join(array$sampInfo,
+                                  temp, by = 'submitted_donor_id')
+array$sampInfo$molgrad_scaled <- GGally::rescale01(array$sampInfo$molgrad_PDX)
+array$sampInfo$purIST = as.numeric(create.classif(df2,
+                                            Moffitt_classifier_2019,
+                                            fit = Moffitt_classifier_2019$fit)$predprob)
+  
+## plot expression agreement between seq and array
+for(i in noquote(c(names(gene_lists),
+                       "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"))){
+  
+  # tmp <- which(PACA_AU_seq$featInfo$SYMBOL %in% this_gene_list)
+  # PACA_AU_seq$score[[i]] <- colMeans(log2(1+PACA_AU_seq$ex[tmp,]),na.rm = TRUE)
+  # # print(length(tmp))
+  # 
+  # tmp <- which(PACA_AU_array$featInfo$SYMBOL %in% this_gene_list)
+  # PACA_AU_array$score[[i]] <- colMeans(PACA_AU_array$ex[tmp,],na.rm = TRUE)
+  # # print(length(tmp))
+  
+  dat <- data.frame(
+    seq =  seq$sampInfo[,i][
+      match(matched_samples,
+            seq$sampInfo$submitted_donor_id)],
+    array =  array$sampInfo[,i][
+      match(matched_samples,
+            array$sampInfo$submitted_donor_id)],
+    type = array$sampInfo$Sample.type[
+      match(matched_samples,
+            array$sampInfo$submitted_donor_id)]
+  )
+  
+  cell_lines <- which(dat$type %in% "Cell line ")
+  cell_lines <- dat[cell_lines,]
+
+  dat <- rbind(dat, cell_lines)
+  
+  print(
+    ggplot(dat = dat, aes(x=array, y=seq, fill = type)) +
+      geom_point(shape=21, alpha = 0.8, size = 4)  + 
+      theme_pubr() +
+      stat_ellipse(data = subset(dat, type %in% "Cell line "),
+                   aes(color = type),
+                   type = "t",
+                   level = 0.95) +
+      geom_smooth(data = subset(dat, type %in% "Primary tumour"),
+                  method = lm,
+                  color = "#619CFF",
+                  fill = "gray") +
+      geom_text(aes(x = max(dat$array),
+                y = 0,
+                label = paste("p = ",
+                              round(cor.test(dat$seq, dat$array)[3][[1]],8)))) +
+      geom_text(aes(x = max(dat$array),
+                y = max(dat$seq) - 0.5,
+                label = paste("Pearson's = ",
+                              round(cor.test(dat$seq, dat$array)[4][[1]][[1]],5)))) +
+      theme(aspect.ratio = 1) +
+      labs(title = i, color = "RNAseq sample type") +
+      xlab("Signature score on primary tumor (PACA_AU_array)") +
+      ylab("Signature score on matched sample (PACA_AU_seq)")
+  )
+  cat("\n")
+}
+```
+
+## Add classifier geneset to dataset
+```{r, echo=FALSE, warning=F}
+# ===================================================================== 
+# Append purIST and molgrad predictions 
+
+
+
+tumor.classifier <- Moffitt_classifier_2019
+
+classifierGeneNames <- tumor.classifier$TSPs
+# print(classifierGeneNames[!(classifierGeneNames %in% PACA_AU_seq$featInfo$SYMBOL)])
+# print(classifierGeneNames[!(classifierGeneNames %in% PACA_AU_array$featInfo$SYMBOL)])
+
+
+rownames(PACA_AU_seq$ex) <- make.names(PACA_AU_seq$featInfo$SYMBOL, 
+                                       unique=TRUE) 
+
+PACA_AU_seq$sampInfo$SST_subtypes <- as.numeric(create.classif(dat=PACA_AU_seq$ex, fit=tumor.classifier$fit, 
+                                                                          classifier=tumor.classifier)$predprob) 
+# str(PACA_AU_seq$sampInfo)
+
+rownames(PACA_AU_array$ex) <- make.names(PACA_AU_array$featInfo$SYMBOL, 
+                                         unique=TRUE) 
+
+PACA_AU_array$sampInfo$SST_subtypes <- as.numeric(create.classif(dat=PACA_AU_array$ex, fit=tumor.classifier$fit,
+                                                                            classifier=tumor.classifier)$predprob)
+# str(PACA_AU_array$sampInfo)
+
+```
+
+\newpage
+
+## Popular signatures and classifier score
+```{r,fig.width=8,fig.height=8, echo=F}
+matched_samples <-  intersect(PACA_AU_seq$sampInfo$submitted_donor_id,
+                              PACA_AU_array$sampInfo$submitted_donor_id)
+for(i in c("Moffitt.Basal.25","Moffitt.Classical.25")){
+  
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  
+  tmp <- which(PACA_AU_seq$featInfo$SYMBOL %in% this_gene_list)
+  PACA_AU_seq$score[[i]] <- colMeans(log2(1+PACA_AU_seq$ex[tmp,]),na.rm = TRUE)
+  print(length(tmp))
+  
+  tmp <- which(PACA_AU_array$featInfo$SYMBOL %in% this_gene_list)
+  PACA_AU_array$score[[i]] <- colMeans(PACA_AU_array$ex[tmp,],na.rm = TRUE)
+  # print(length(tmp))
+  
+}
+
+dat <- data.frame(
+  seq.basal =  PACA_AU_seq$score[["Moffitt.Basal.25"]][
+    match(matched_samples,PACA_AU_seq$sampInfo$submitted_donor_id)],
+  seq.classical =  PACA_AU_seq$score[["Moffitt.Classical.25"]][
+    match(matched_samples,PACA_AU_seq$sampInfo$submitted_donor_id)],
+  array.basal =  PACA_AU_array$score[["Moffitt.Basal.25"]][
+    match(matched_samples,PACA_AU_array$sampInfo$submitted_donor_id)],
+  array.classical =  PACA_AU_array$score[["Moffitt.Classical.25"]][
+    match(matched_samples,PACA_AU_array$sampInfo$submitted_donor_id)],
+  type = PACA_AU_array$sampInfo[["Sample.type"]][
+    match(matched_samples,PACA_AU_array$sampInfo$submitted_donor_id)],
+  seq.sst =  PACA_AU_seq$sampInfo[["SST_subtypes"]][
+    match(matched_samples,PACA_AU_seq$sampInfo$submitted_donor_id)],
+  array.sst =  PACA_AU_array$sampInfo[["SST_subtypes"]][
+    match(matched_samples,PACA_AU_array$sampInfo$submitted_donor_id)]
+)
+
+
+
+p1 <- ggplot(dat, aes(x = seq.basal,
+                      y = seq.classical)) + 
+  geom_point(aes(fill = seq.sst),
+             shape = 21,
+             size = 1.5,
+             alpha = 1) + 
+  scale_fill_gradientn(colors = c("blue", "white", "orange"),
+                       breaks = c(0, 0.5, 1),
+                       limits = c(0,1)) + 
+  scale_color_manual(values = c("orange", "blue")) +
+  theme_pubr()
+
+
+p2 <- ggplot(dat, aes(x = array.basal,
+                      y = array.classical)) + 
+  geom_point(aes(fill = array.sst),
+             shape = 21,
+             size = 1.5,
+             alpha = 1) + 
+  scale_fill_gradientn(colors = c("blue", "white", "orange"),
+                       breaks = c(0, 0.5, 1),
+                       limits = c(0,1)) + 
+  scale_color_manual(values = c("orange", "blue")) +
+  theme_pubr()
+
+
+ggarrange(p1,p2, ncol = 2, nrow = 2)
+
+
+
+p <- ggplot(subset(dat, type %in% "Primary tumour"),
+             aes(x = seq.sst,
+                 y = array.sst)) + 
+  geom_point(aes(alpha = 0.2,
+                 fill = ((seq.sst + array.sst) / 2),
+                 size = 1.5),
+                 shape = 21) +
+  scale_fill_gradientn(colors = c("blue", "white", "orange"),
+                       breaks = c(0, 0.5, 1),
+                       limits = c(0,1)) +
+  scale_color_gradientn(colors = c("blue", "white", "orange"),
+                        breaks = c(0, 0.5, 1),
+                        limits = c(0,1)) +
+  coord_fixed() +
+  theme_pubr() +
+  geom_smooth(method = lm,
+              color = "black",
+              fill = "gray") +
+  stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")), 
+           method = "pearson") +
+  geom_rug(sides = "tr",
+           alpha = 0.5,
+           position = "jitter",
+           aes(color = ((seq.sst + array.sst) / 2)))
+
+print(p)
+
+```

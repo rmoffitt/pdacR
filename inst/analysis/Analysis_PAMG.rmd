@@ -1,0 +1,348 @@
+---
+title: "PAMG Test Analysis"
+author: "Luke Torre-Healy"
+date: "8/3/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, collapse = T,fig.height = 2.5)
+library(dplyr)
+library(pdacR)
+library(pdacmolgrad)
+library(survival)
+library(survminer)
+```
+
+# TCGA
+
+## Generate and bind the mol grad scores
+```{r}
+df = pdacR::TCGA_PAAD$ex[,which(pdacR::TCGA_PAAD$sampInfo$Decision == 'whitelist')] # %>% t %>% scale(scale = F) %>% t
+temp = projectMolGrad(log2(1+df), geneSymbols = TCGA_PAAD$featInfo$SYMBOL)
+names(temp) <- paste0("molgrad_",names(temp))
+temp$Tumor.Sample.ID = rownames(temp)
+
+df = TCGA_PAAD$ex[,which(pdacR::TCGA_PAAD$sampInfo$Decision == 'whitelist')]
+colnames(df) = paste0("Sample",seq(from=1,to=ncol(df),by=1))
+# df = cbind(TCGA_PAAD$featInfo$SYMBOL,log2(1+df))
+# colnames(df)[1] = "GeneSym"
+# write.table(x = df[,1:10], file = "./TCGA_first10.tsv", sep = "\t", row.names = F)
+rownames(df) = TCGA_PAAD$featInfo$SYMBOL
+sampInfo = dplyr::full_join(TCGA_PAAD$sampInfo[which(pdacR::TCGA_PAAD$sampInfo$Decision == 'whitelist'),],
+                            temp, by = 'Tumor.Sample.ID')
+sampInfo$purIST = as.numeric(create.classif(df,
+                                            Moffitt_classifier_2019,
+                                            fit = Moffitt_classifier_2019$fit)$predprob)
+
+hist(temp$molgrad_PDX)
+```
+
+```{r}
+sampInfo$survivalB = sampInfo$survivalA/30 # Months
+# Generate Images
+plots = list()
+
+# Dropped stage X or stage not reported samples
+tmp.df <-sampInfo[,c("survivalA","censorA.0yes.1no",
+                     "molgrad_PDX","purIST")]
+tmp.df <- droplevels(tmp.df)
+tmp.df$censorA.0yes.1no <- as.integer(as.character(tmp.df$censorA.0yes.1no))
+tmp.df$scaled_molgrad = GGally::rescale01(tmp.df$molgrad_PDX)
+```
+
+\newpage 
+
+```{r}
+# Cox plot generation
+#tmp.df$scaled.percent_pos <- tmp.df$percent_pos / sd.split
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      scaled_molgrad,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      molgrad_PDX,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      purIST,
+                   data = tmp.df)
+
+#plots$cox = ggforest(fit.coxph, data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+```
+
+\newpage
+
+# ICGC-AU (array - as used in paper)
+
+## Generate and bind the mol grad scores
+
+```{r}
+df = pdacR::PACA_AU_array$ex #%>% t %>% scale(scale = F) %>% t
+colnames(df) = PACA_AU_array$sampInfo$submitted_donor_id
+df$sym = PACA_AU_array$featInfo$SYMBOL
+df2 = aggregate(df[-which(names(df) == "sym")],
+                list(as.character(df$sym)),
+                sum)
+rownames(df2) = df2$Group.1
+df2 = df2[-1]
+df2 = df2[,which(colnames(df2) %in% c('ICGC_0543','ICGC_0521','ICGC_0522','ICGC_0535'))]
+temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2), normalize = 'raw')
+
+#temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2))
+names(temp) <- paste0("molgrad_",names(temp))
+temp$submitted_donor_id = rownames(temp)
+
+temp[which(rownames(temp) %in% c('ICGC_0543','ICGC_0521','ICGC_0522','ICGC_0535')),]
+
+df = as.data.frame(PACA_AU_array$ex)
+colnames(df) = PACA_AU_array$sampInfo$submitted_donor_id
+df$sym = PACA_AU_array$featInfo$SYMBOL
+df2 = aggregate(df[-which(names(df) == "sym")],
+                list(as.character(df$sym)),
+                sum)
+rownames(df2) = df2$Group.1
+df2 = df2[-1]
+sampInfo = dplyr::full_join(PACA_AU_array$sampInfo,
+                            temp, by = 'submitted_donor_id')
+sampInfo$purIST = as.numeric(create.classif(df2,
+                                            Moffitt_classifier_2019,
+                                            fit = Moffitt_classifier_2019$fit)$predprob)
+
+hist(temp$molgrad_PDX)
+```
+
+
+```{r}
+# Cox plot generation
+#tmp.df$scaled.percent_pos <- tmp.df$percent_pos / sd.split
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      scaled_molgrad,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      molgrad_PDX,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      purIST,
+                   data = tmp.df)
+
+#plots$cox = ggforest(fit.coxph, data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+```
+
+# ICGC-AU (Seq)
+
+## Generate and bind the mol grad scores
+```{r}
+df = pdacR::PACA_AU_seq$ex #%>% t %>% scale(scale = F) %>% t
+colnames(df) = PACA_AU_seq$sampInfo$submitted_donor_id
+# df$sym = PACA_AU_seq$featInfo$SYMBOL
+# df2 = aggregate(df[-which(names(df) == "sym")],
+#                list(as.character(df$sym)),
+#                sum)
+# rownames(df2) = df2$Group.1
+# df2 = df2[-1]
+#df = df[,which(colnames(df) %in% c('ICGC_0543','ICGC_0521','ICGC_0522','ICGC_0535'))]
+temp = projectMolGrad(log2(1+df), geneSymbols = pdacR::PACA_AU_seq$featInfo$SYMBOL, normalize = 'raw')
+#temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2))
+names(temp) <- paste0("molgrad_",names(temp))
+temp$submitted_donor_id = rownames(temp)
+
+temp[which(rownames(temp) %in% c('ICGC_0543','ICGC_0521','ICGC_0522','ICGC_0535')),]
+
+df = as.data.frame(PACA_AU_seq$ex)
+colnames(df) = PACA_AU_seq$sampInfo$submitted_donor_id
+df$sym = PACA_AU_seq$featInfo$SYMBOL
+df2 = aggregate(df[-which(names(df) == "sym")],
+                list(as.character(df$sym)),
+                sum)
+rownames(df2) = df2$Group.1
+df2 = df2[-1]
+sampInfo = dplyr::full_join(PACA_AU_seq$sampInfo,
+                            temp, by = 'submitted_donor_id')
+sampInfo = sampInfo[-which(sampInfo$submitted_donor_id == "ICGC_0099.1"),]
+sampInfo$purIST = as.numeric(create.classif(df2,
+                                            Moffitt_classifier_2019,
+                                            fit = Moffitt_classifier_2019$fit)$predprob)
+
+hist(temp$molgrad_PDX)
+```
+
+```{r}
+sampInfo$survivalB = sampInfo$survivalA/30 # Months
+# Generate Images
+plots = list()
+
+# Dropped stage X or stage not reported samples
+tmp.df <-sampInfo[,c("survivalA","censorA.0yes.1no",
+                     "molgrad_PDX","purIST")]
+tmp.df <- droplevels(tmp.df)
+tmp.df$censorA.0yes.1no <- as.integer(as.character(tmp.df$censorA.0yes.1no))
+tmp.df$scaled_molgrad = GGally::rescale01(tmp.df$molgrad_PDX)
+```
+
+\newpage 
+
+```{r}
+# Cox plot generation
+#tmp.df$scaled.percent_pos <- tmp.df$percent_pos / sd.split
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      scaled_molgrad,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      molgrad_PDX,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censorA.0yes.1no) ~ 
+                      purIST,
+                   data = tmp.df)
+
+#plots$cox = ggforest(fit.coxph, data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+```
+
+
+# Puleo
+
+## Generate and bind the mol grad scores
+
+```{r}
+df = pdacR::Puleo_array$ex #%>% t %>% scale(scale = F) %>% t
+colnames(df) = Puleo_array$sampInfo$Sample.name
+# df$sym = PACA_AU_seq$featInfo$SYMBOL
+# df2 = aggregate(df[-which(names(df) == "sym")],
+#                list(as.character(df$sym)),
+#                sum)
+# rownames(df2) = df2$Group.1
+# df2 = df2[-1]
+temp = projectMolGrad(log2(1+df), geneSymbols = pdacR::Puleo_array$featInfo$SYMBOL, normalize = 'raw')
+#temp = projectMolGrad(log2(1+df2), geneSymbols = rownames(df2))
+names(temp) <- paste0("molgrad_",names(temp))
+temp$Sample.name = rownames(temp)
+
+df = as.data.frame(Puleo_array$ex)
+colnames(df) = Puleo_array$sampInfo$Sample.name
+rownames(df) = Puleo_array$featInfo$SYMBOL
+# df$sym = Puleo_array$featInfo$SYMBOL
+# df2 = aggregate(df[-which(names(df) == "sym")],
+#                 list(as.character(df$sym)),
+#                 sum)
+# rownames(df2) = df2$Group.1
+# df2 = df2[-1]
+sampInfo = dplyr::full_join(Puleo_array$sampInfo,
+                            temp, by = 'Sample.name')
+sampInfo$purIST = as.numeric(create.classif(df,
+                                            Moffitt_classifier_2019,
+                                            fit = Moffitt_classifier_2019$fit)$predprob)
+
+hist(temp$molgrad_PDX)
+```
+
+```{r}
+sampInfo$survivalB = sampInfo$survivalA/30 # Months
+# Generate Images
+plots = list()
+
+# Dropped stage X or stage not reported samples
+tmp.df <-sampInfo[,c("survivalA","censor.0yes.1no",
+                     "molgrad_PDX","purIST")]
+tmp.df <- droplevels(tmp.df)
+tmp.df$censor.0yes.1no <- as.integer(as.character(tmp.df$censor.0yes.1no))
+tmp.df$scaled_molgrad = GGally::rescale01(tmp.df$molgrad_PDX)
+```
+
+\newpage 
+
+```{r}
+# Cox plot generation
+#tmp.df$scaled.percent_pos <- tmp.df$percent_pos / sd.split
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censor.0yes.1no) ~ 
+                      scaled_molgrad,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censor.0yes.1no) ~ 
+                      molgrad_PDX,
+                   data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+
+fit.coxph <- coxph(Surv(time = tmp.df$survivalA,
+                        event = tmp.df$censor.0yes.1no) ~ 
+                      purIST,
+                   data = tmp.df)
+
+#plots$cox = ggforest(fit.coxph, data = tmp.df)
+ggforest(fit.coxph, data = tmp.df)
+```
+<!-- # Using their sample data -->
+
+<!-- ```{r} -->
+<!-- example <- as.data.frame(read_delim("~/pdacR/inst/extdata/example.tab", -->
+<!--                       "\t", escape_double = FALSE, trim_ws = TRUE)) -->
+<!-- example_output = projectMolGrad(example[,-1], example$GeneSym) -->
+<!-- names(example_output) <- paste0("molgrad_",names(example_output)) -->
+<!-- example_output$submitted_donor_id = rownames(example_output) -->
+
+<!-- sampInfo = dplyr::right_join(pdacR::PACA_AU_seq$sampInfo, -->
+<!--                             example_output, by = 'submitted_donor_id') -->
+<!-- rownames(example) = example$GeneSym -->
+<!-- example = example[,-1] -->
+<!-- sampInfo$purIST = as.numeric(create.classif(example, -->
+<!--                                             Moffitt_classifier_2019, -->
+<!--                                             fit = Moffitt_classifier_2019$fit)$predprob) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- sampInfo$survivalB = sampInfo$survivalA/30 # Months -->
+<!-- # Generate Images -->
+<!-- plots = list() -->
+
+<!-- # Dropped stage X or stage not reported samples -->
+<!-- tmp.df <-sampInfo[,c("survivalA","censorA.0yes.1no", -->
+<!--                      "molgrad_PDX","purIST")] -->
+<!-- tmp.df <- droplevels(tmp.df) -->
+<!-- tmp.df$censorA.0yes.1no <- as.integer(as.character(tmp.df$censorA.0yes.1no)) -->
+<!-- tmp.df$scaled_molgrad = GGally::rescale01(tmp.df$molgrad_PDX) -->
+<!-- names(tmp.df) -->
+<!-- # Cox plot generation -->
+<!-- #tmp.df$scaled.percent_pos <- tmp.df$percent_pos / sd.split -->
+
+<!-- fit.coxph <- coxph(Surv(time = tmp.df$survivalA, -->
+<!--                         event = tmp.df$censorA.0yes.1no) ~  -->
+<!--                       scaled_molgrad, -->
+<!--                    data = tmp.df) -->
+<!-- ggforest(fit.coxph, data = tmp.df) -->
+
+<!-- fit.coxph <- coxph(Surv(time = tmp.df$survivalA, -->
+<!--                         event = tmp.df$censorA.0yes.1no) ~  -->
+<!--                       purIST, -->
+<!--                    data = tmp.df) -->
+
+<!-- #plots$cox = ggforest(fit.coxph, data = tmp.df) -->
+<!-- ggforest(fit.coxph, data = tmp.df) -->
+<!-- ``` -->

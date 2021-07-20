@@ -1,0 +1,447 @@
+---
+title: "PDAC gene expression analysis"
+author: "Richard Moffitt"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+# Setup
+## load required libraries
+
+```{r, include = F}
+library(pdacR)
+library(ggplot2)
+library(reshape2)
+library(sva)
+library(GGally)
+library(plyr)
+library(ggpubr)
+library(pROC)
+library(survminer)
+library(survival)
+library(ggrepel)
+library(pdacmolgrad)
+```
+
+## Select data set
+```{r, include=F}
+dataset <- pdacR::TCGA_PAAD
+
+geneMeans <- rowMeans(dataset$ex)
+genesToDelete <- which(geneMeans < .01)
+
+dataset$ex <- log2(1+dataset$ex[-genesToDelete,])
+dataset$featInfo <- dataset$featInfo[-genesToDelete,]
+
+```
+
+## Calculate signature scores and SSC
+```{r, include=F}
+# =====================================================================
+# perform single sample classifier for guidance
+
+tumor.classifier <- Moffitt_classifier_2019
+
+dataset$sampInfo$SST_subtypes<- as.numeric(create.classif(dat=dataset$ex,
+                                              fit=tumor.classifier$fit,
+                                              classifier=tumor.classifier)$predprob)
+
+
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+# =====================================================================
+# Calculate expression scores
+for(i in names(gene_lists)){
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  tmp <- which(dataset$featInfo$SYMBOL %in% this_gene_list)
+  dataset$sampInfo[i] <- colMeans((dataset$ex[tmp,]),na.rm = TRUE)
+}
+
+dataset$sampInfo$PDL1 <- (as.numeric(t(dataset$ex[dataset$featInfo$SYMBOL %in% "CD274",])))
+# =====================================================================
+# Make utility tracks
+dataset$sampInfo$betterBailey <- 
+  factor(dataset$sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX,
+         labels = c("squamous","immunogenic","progenitor","ADEX"))
+dataset$sampInfo$betterMoffitt <- 
+  factor(dataset$sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical,
+         labels = c("basal","classical"))
+dataset$sampInfo$betterCollisson <- 
+  factor(dataset$sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM,
+         labels = c("classical","exocrine","QM"))
+# =====================================================================
+# Append purIST and molgrad predictions
+temp <- projectMolGrad(dataset$ex,
+                       geneSymbols = dataset$featInfo$SYMBOL, normalize = 'raw')
+names(temp) <- paste0("molgrad_",names(temp))
+temp$Tumor.Sample.ID = rownames(temp)
+print(head(temp))
+
+dataset$sampInfo <- join(dataset$sampInfo,
+                         temp,
+                         by = 'Tumor.Sample.ID')
+rownames(dataset$ex) <- dataset$featInfo$SYMBOL
+dataset$sampInfo$purIST <- as.numeric(create.classif(dataset$ex,
+                                                     Moffitt_classifier_2019,
+                                                     fit = Moffitt_classifier_2019$fit)$predprob)
+dataset$sampInfo$molgrad_scaled <- GGally::rescale01(dataset$sampInfo$molgrad_PDX)
+
+# =====================================================================
+# Identify sample subsets
+
+```
+
+# Results
+
+## Tumor classifier and ABSOLUTE
+```{r,fig.width=8,fig.height=8, echo=FALSE, warning=F}
+# Tumor classifier
+
+p1 <- ggplot(dat = subset(dataset$sampInfo,Decision %in% "whitelist"),
+       aes(x = SST_subtypes ,
+           y = ABSOLUTE.Purity)
+       ) +
+  geom_point(alpha = 0.5, size = 3,
+             shape = 21,
+             aes(fill = betterBailey)
+  )+
+  labs(title = "TCGA PAAD RNAseq samples",
+       color='Subtype') +
+  xlab("Tumor classifier") +
+  ylab("Purity (ABSOLUTE)")+ 
+  theme_pubr() +
+  geom_vline(xintercept = 0.5,
+             linetype = "dashed",
+             color = "black") +
+  geom_rug(sides = "tr",
+           alpha = 0.5,
+           position = "jitter",
+           aes(color = betterBailey)) +
+  geom_smooth(method='loess',color="black")+
+  scale_colour_manual(values = c("squamous" = "orange",
+                                 "immunogenic" = "darkred",
+                                 "progenitor" = "blue",
+                                 "ADEX" = "pink")) + 
+  scale_fill_manual(values = c("squamous" = "orange",
+                                 "immunogenic" = "darkred",
+                                 "progenitor" = "blue",
+                                 "ADEX" = "pink"),
+                    na.value = "gray")
+
+p2 <- ggplot(dat = subset(dataset$sampInfo,Decision %in% "whitelist"),
+       aes(x = SST_subtypes ,
+           y = ABSOLUTE.Purity)
+       ) +
+  geom_point(alpha = 0.5, size = 3,
+             shape = 21,
+             aes(fill = MoffittTumor)
+  )+
+  labs(title = "TCGA PAAD RNAseq samples",
+       color='Subtype') +
+  xlab("Tumor classifier") +
+  ylab("Purity (ABSOLUTE)")+ 
+  theme_pubr() +
+  geom_vline(xintercept = 0.5,
+             linetype = "dashed",
+             color = "black") +
+  geom_rug(sides = "tr",
+           alpha = 0.5,
+           position = "jitter",
+           aes(color = MoffittTumor)) +
+  geom_smooth(method='loess',color="black")+
+  scale_colour_manual(values = c("basal" = "orange",
+                                 "classical" = "blue")) + 
+  scale_fill_manual(values = c("basal" = "orange",
+                                "classical" = "blue"),
+                    na.value = "gray")
+
+
+ggarrange(p1,p2, nrow=2, ncol=2)
+
+```
+
+
+## Classifier consistency with basal and classical gene top 25 scores
+```{r, fig.width=8, fig.height=8, echo=FALSE, warning=F}
+
+p1 <- ggplot(subset(dataset$sampInfo, tumor.classifier.training %in% TRUE), aes(x = Moffitt.Basal.25,
+                                  y = Moffitt.Classical.25)) + 
+  geom_point(aes(fill = SST_subtypes),
+             shape = 21,
+             size = 2,
+             alpha = 0.7) + 
+  scale_fill_gradientn(colors = c("blue", "white", "orange"),
+                       breaks = c(0, 0.5, 1),
+                       limits = c(0,1)) + 
+  geom_rug(sides = "tr",
+           alpha = 0.5,
+           position = "jitter",
+           aes(color = MoffittTumor)) + 
+  scale_color_manual(values = c("orange", "blue")) +
+  theme_pubr()
+
+
+print(p1)
+
+```
+
+## Tumor classifier and leukocyte percent
+```{r,fig.width=8,fig.height=8, echo=FALSE, warning=F}
+
+# Nanostring classifier
+# Old
+p1 <- ggplot(dat = subset(dataset$sampInfo,Decision %in% "whitelist"),
+       aes(x = SST_subtypes ,
+           y = DNA.methylation.leukocyte.percent.estimate)
+       ) +
+  geom_point(alpha = 0.5, size = 4,
+             aes(color = betterBailey)
+  )+
+  labs(title = "TCGA PAAD RNAseq samples",
+       color='Subtype') +
+  xlab("Nanostring classifier") +
+  ylab("Leukocyte (% Estimate)")+ 
+  geom_smooth(method='loess',color="black")+
+  scale_colour_manual(values = c("squamous" = "orange",
+                                 "immunogenic" = "darkred",
+                                 "progenitor" = "blue",
+                                 "ADEX" = "pink"))
+
+p2 <- ggplot(dat = subset(dataset$sampInfo,Decision %in% "whitelist"),
+       aes(x = SST_subtypes ,
+           y = DNA.methylation.leukocyte.percent.estimate)
+       ) +
+  geom_point(alpha = 0.5, size = 4,
+             aes(color = MoffittTumor)
+  )+
+  labs(title = "TCGA PAAD RNAseq samples",
+       color='Subtype') +
+  xlab("Nanostring classifier") +
+  ylab("Leukocyte (% Estimate)")+ 
+  geom_smooth(method='loess',color="black")+
+  scale_colour_manual(values = c("basal" = "orange",
+                                 "classical" = "blue"))
+
+
+
+ggarrange(p1,p2, nrow = 2, ncol = 2)
+
+```
+
+
+## Gene expression signatures and ABSOLUTE
+```{r,fig.width=8,fig.height=5, echo=FALSE, warning=F}
+list.of.gene.lists <- c("ICGC.ADEX.Up",
+                        "ICGC.Immunogenic.Up",
+                        "Collisson.Exocrine",
+                        "Collisson.QM",
+                        "ICGC.Squamous.Up",
+                        "Moffitt.Basal.25",
+                        "ADEX_unique",
+                        "Squamous_unique",
+                        "Progenitor_unique",
+                        "Immunogenic_unique",
+                        "Notta.BasalA",
+                        "Notta.BasalB",
+                        "Notta.ClassicalA",
+                        "Notta.ClassicalB",
+                        "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"
+                        )
+nonsqrt <- c("molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled")
+
+for(gene.list in list.of.gene.lists){
+  dat = subset(dataset$sampInfo,Decision %in% "whitelist")
+  p <- ggplot(data = dat,
+              aes(x = ABSOLUTE.Purity ,
+                  y = dat[[gene.list]])
+  ) +
+    geom_point(alpha = 0.5, size = 3,
+               shape = 21,
+               aes(fill = betterBailey)
+    )+
+    labs(title = "TCGA PAAD RNAseq samples",
+         color='Subtype') +
+    xlab("Purity (ABSOLUTE)") +
+    ylab(gene.list)+
+    theme_pubr() +
+    theme(aspect.ratio = 1) +
+    #geom_smooth(method='lm',color="black")+
+    scale_fill_manual(values = c("squamous" = "orangered",
+                                   "immunogenic" = "darkred",
+                                   "progenitor" = "navy",
+                                   "ADEX" = "hotpink"))
+  print(p)
+
+
+  print(round(cor.test(dat$ABSOLUTE.Purity, dat[[gene.list]])[4][[1]][[1]],5))
+  print(round(cor.test(dat$ABSOLUTE.Purity, dat[[gene.list]])[3][[1]],8))
+}
+
+
+for(gene.list in list.of.gene.lists){
+  dat = subset(dataset$sampInfo,Decision %in% "whitelist")
+  if(gene.list %in% nonsqrt){
+    if(gene.list %in% 'purIST'){
+      ylimit = ylim(0,1)
+    } else if(gene.list %in% c('molgrad_PDX')){
+      ylimit = ylim(-0.15,0.25)
+    }
+    p <- ggplot(data = dat,
+              aes(x = ABSOLUTE.Purity ,
+                  y = dat[[gene.list]])
+  ) +
+    geom_point(alpha = 0.5, size = 3,
+               shape = 21,
+               aes(fill = MoffittTumor)
+    )+
+    labs(title = "TCGA PAAD RNAseq samples",
+         color='Subtype') +
+    xlab("Purity (ABSOLUTE)") +
+    ylab(gene.list)+
+    theme_pubr() + 
+    ylimit +
+    theme(aspect.ratio = 1) +
+    #geom_smooth(method='lm',color="black")+
+    scale_fill_manual(values = c("classical" = "blue",
+                                   "basal" = "orange"))
+  print(p)  
+    
+  }else{
+  
+  p <- ggplot(data = dat,
+              aes(x = ABSOLUTE.Purity ,
+                  y = dat[[gene.list]])
+  ) +
+    geom_point(alpha = 0.5, size = 3,
+               shape = 21,
+               aes(fill = MoffittTumor)
+    )+
+   
+    # scale_y_continuous(trans='sqrt')+
+    labs(title = "TCGA PAAD RNAseq samples",
+         color='Subtype') +
+    xlab("Purity (ABSOLUTE)") +
+    ylab(gene.list)+
+    theme_pubr() + 
+    theme(aspect.ratio = 1) +
+    #geom_smooth(method='lm',color="black")+
+    scale_fill_manual(values = c("classical" = "blue",
+                                   "basal" = "orange"))
+  print(p)  
+  
+
+  print(round(cor.test(dat$ABSOLUTE.Purity, dat[[gene.list]])[4][[1]][[1]],5))
+  print(round(cor.test(dat$ABSOLUTE.Purity, dat[[gene.list]])[3][[1]],8))
+  }
+}
+
+```
+
+## PDL1 expression
+```{r,fig.width=8,fig.height=5, echo=FALSE, warning=F}
+
+ggplot(dat = subset(dataset$sampInfo,Decision %in% "whitelist"),
+       aes(x = PDL1 ,
+           y = DNA.methylation.leukocyte.percent.estimate)
+       ) +
+  geom_point(alpha = 0.5, size = 4,
+             aes(color = betterBailey)
+  )+
+  labs(title = "TCGA PAAD RNAseq samples",
+       color='Subtype') +
+  xlab("PD-L1 expression") +
+  ylab("Leukocyte Fraction (methylation)")+ 
+  scale_colour_manual(values = c("squamous" = "orange",
+                                 "immunogenic" = "darkred",
+                                 "progenitor" = "blue",
+                                 "ADEX" = "pink"))
+
+```
+<!-- ## Clustering on published genesets -->
+<!-- ### Notta subdivisions -->
+```{r, fig.width=6, fig.height=6, echo=FALSE, warning=F}
+
+
+# sampleset <- 1:nrow(dataset$sampInfo)
+# tmp.k <- 2
+# tmp.ncusts <- 2
+# 
+# featureset <- which(dataset$featInfo$SYMBOL %in% 
+#                       c(as.character(pdacR::gene_lists$Moffitt.Classical.25),
+#                         as.character(pdacR::gene_lists$Moffitt.Basal.25)))
+# 
+# smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+# 
+# sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+#                                                          seed = 1234,
+#                                                          pFeature = 0.8,
+#                                                          pItem = 0.8,
+#                                                          maxK = 6,
+#                                                          reps=200,
+#                                                          distance="pearson",
+#                                                          clusterAlg="kmdist")[[tmp.k]]$consensusTree
+# 
+# tmp.cluster <- c("basal","classical")[cutree(tree = sampletree, k = 2)]
+# dataset$sampInfo$MoffittTumor <- NA
+# dataset$sampInfo$MoffittTumor[sampleset] <- tmp.cluster
+# 
+# ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+#                                 sampleTracks = c("MoffittTumor",
+#                                   "Average.VAF",
+#                                                  "Sample.name"),
+#                                 colorlists = list(c("orange", "blue"),
+#                                   c("white", "yellow", "black"),
+#                                                   c("white","red","yellow","green","blue")),
+#                                 drop.levels = TRUE)
+# 
+# 
+# RowSideColors <-  getSideColors(sampInfo = data.frame(classical =dataset$featInfo$SYMBOL[featureset] %in%
+#                                                         pdacR::gene_lists$Moffitt.Classical.25,
+#                                                       basal =dataset$featInfo$SYMBOL[featureset] %in%
+#                                                         pdacR::gene_lists$Moffitt.Basal.25),
+#                                 sampleTracks = c("classical",
+#                                                  "basal"),
+#                                 colorlists = list(c=c("white","blue"),
+#                                                   b=c("white","orange")))
+
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE}
+# heatmap.3(x = smallx,
+#           scale="row",
+#           labRow = dataset$featInfo$SYMBOL[featureset],
+#           col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+#           Colv = as.dendrogram(sampletree),
+#           Rowv = TRUE,
+#           distfun = function(x) as.dist((1-cor(t(x)))/2),
+#           ColSideColors = ColSideColors$SideColors,
+#           ColSideColorsSize = 6,
+#           RowSideColorsSize = 6,
+#           RowSideColors = t(RowSideColors$SideColors),
+#           margins = c(5,20))
+# legend(xy.coords(x=.90,y=1),
+#        legend=c(ColSideColors$text),
+#        fill=c(ColSideColors$colors),
+#        border=FALSE, bty="n",
+#        y.intersp = 0.9, cex=0.5)
+
+```

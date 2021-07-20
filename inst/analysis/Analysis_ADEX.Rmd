@@ -1,0 +1,632 @@
+---
+title: "PDAC gene expression analysis"
+author: "Richard Moffitt"
+output: pdf_document
+---
+
+# Setup
+# RNAseq dataset
+## load required libraries
+```{r setup, echo=F, warning=F, include=F}
+library(pdacR)
+library(ggplot2)
+library(ggpubr)
+library(plyr)
+library(dplyr)
+library(mosaic)
+library(pdacmolgrad)
+
+dataset <- pdacR::PACA_AU_seq
+
+geneMeans <- rowMeans(dataset$ex)
+genesToDelete <- which(geneMeans < .01)
+
+  dataset$ex <- sqrt(dataset$ex[-genesToDelete,])
+dataset$featInfo <- dataset$featInfo[-genesToDelete,]
+
+gene_lists <- pdacR::gene_lists
+
+
+dataset$sampInfo$qpure_score <- 
+  as.numeric(as.character(dataset$sampInfo$qpure_score))
+```
+
+# Run classifier for guidance
+```{r, echo = FALSE, include = FALSE}
+
+# Tumor classifier
+tumor.classifier <- pdacR::Moffitt_classifier_2019
+
+classifierGeneNames <- c(as.vector(tumor.classifier$TSPs))
+
+dataset$ex <- dataset$ex
+
+print(classifierGeneNames[!(classifierGeneNames %in% dataset$featInfo$SYMBOL)])
+
+rownames(dataset$ex) <- make.names(dataset$featInfo$SYMBOL, unique=TRUE)
+
+dataset$sampInfo$SST_subtypes <- as.numeric(create.classif(dat=dataset$ex,
+                                              fit=tumor.classifier$fit,
+                                              classifier=tumor.classifier)$predprob)
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+# =====================================================================
+# Calculate expression scores
+for(i in names(gene_lists)){
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  tmp <- which(dataset$featInfo$SYMBOL %in% this_gene_list)
+  dataset$sampInfo[i] <- colMeans((dataset$ex[tmp,]),na.rm = TRUE)
+}
+# =====================================================================
+# Append purIST and molgrad predictions
+
+df = dataset$ex #%>% t %>% scale(scale = F) %>% t
+colnames(df) = dataset$sampInfo$icgc_sample_id
+df$sym = dataset$featInfo$SYMBOL
+df2 = aggregate(df[-which(names(df) == "sym")],
+                list(as.character(df$sym)),
+                sum)
+rownames(df2) = df2$Group.1
+df2 = df2[-1]
+
+temp <- projectMolGrad(df2,
+                       geneSymbols = rownames(df2))
+names(temp) <- paste0('molgrad_', names(temp))
+temp$icgc_sample_id <- rownames(temp)
+print(head(temp))
+
+dataset$sampInfo <- join(dataset$sampInfo,
+                         temp,
+                         by = 'icgc_sample_id')
+dataset$sampInfo$purIST <- as.numeric(create.classif(df2,
+                                                     Moffitt_classifier_2019,
+                                                     fit = Moffitt_classifier_2019$fit)$predprob)
+dataset$sampInfo$molgrad_scaled <- GGally::rescale01(dataset$sampInfo$molgrad_PDX)
+```
+
+# Append TSP scores to expression data frames
+```{r, echo = FALSE, include = FALSE}
+
+# Tumor classifier
+tmp <- create.classif(dat=dataset$ex, 
+                      fit=tumor.classifier$fit, 
+                      classifier=tumor.classifier) 
+
+gene_lists$TSP.tumor <- rownames(tmp$indmat) 
+
+dataset$featInfo <- join(dataset$featInfo, 
+                         data.frame(SYMBOL = rownames(tmp$indmat)), 
+                         type = "full")
+
+dataset$ex <- rbind(dataset$ex,
+                    tmp$indmat)
+
+```
+
+# Results
+
+## ADEX samples and ACC
+```{r,fig.width=8,fig.height=10, echo=F, warning=F}
+# =====================================================================
+# visualize expression in heat map
+sampleset <- which(!is.na(dataset$sampInfo$Sample.type))
+
+tmp.k <- 4
+tmp.ncusts <- 4
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$ICGC.ADEX.Up)))
+
+smallx <- log2(1+dataset$ex[featureset,sampleset])
+
+sampletree <- convert_order_to_dendrogram(order(sapply(smallx,mean)))
+
+# names(dataset$sampInfo)
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("HistoSubtype",
+                                                 "membership.ordered",
+                                                 "Sample.type",
+                                                 "qpure_score"),
+                                colorlists = list(c("deeppink","purple","navy","darkgreen","skyblue","lightgreen"),
+                                                  c("hotpink","darkred","navy","orangered"),
+                                                  c("darkgreen","navy","hotpink"),
+                                                  c("lightgrey","darkgreen")),
+                                drop.levels = TRUE,
+                                displaynames = c("Histological Subtype",
+                                                 "Cluster assignment from Bailey et al. 2016",
+                                                 "Sample type",
+                                                 "Purity (qpure)"))
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(exocrine = dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Collisson.Exocrine),
+                                sampleTracks = c("exocrine"),
+                                colorlists = c("white","deeppink"),
+                                displaynames = paste("Collisson\nExocrine"))
+heatmap.3(x = smallx, 
+          scale="row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = as.dendrogram(sampletree),
+          Rowv = TRUE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+```
+
+
+```{r,fig.width=4,fig.height=4, echo = FALSE, warning=F}
+# =====================================================================
+# visualize expression in heat map
+
+sampleset <- which(!is.na(dataset$sampInfo$Sample.type))
+
+tmp.k = 4
+tmp.ncusts = 4
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$ICGC.ADEX.Up)))
+
+
+
+sampletree <- convert_order_to_dendrogram(order(dataset$sampInfo$membership.ordered[sampleset], 
+                                                dataset$sampInfo$HistoSubtype[sampleset], 
+                                                dataset$sampInfo$Sample.type[sampleset],
+                                                decreasing = TRUE))
+
+
+# find which ADEX genes are highly expressed in just ACC samples
+acc <- which(dataset$sampInfo$HistoSubtype %in% "Acinar Cell Carcinoma")
+acc_names <- names(dataset$ex)[acc]
+
+smallx <- (dataset$ex[featureset,sampleset])
+
+mat <- smallx[order(rowMeans(smallx[, acc_names]), decreasing = TRUE),]
+
+# ------------------
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("HistoSubtype",
+                                                 "membership.ordered",
+                                                 "Sample.type",
+                                                 "qpure_score"),
+                                colorlists = list(c("deeppink","purple","navy","darkgreen","skyblue","lightgreen"),
+                                                  c("hotpink","darkred","navy","orangered"),
+                                                  c("darkgreen","navy","hotpink"),
+                                                  c("lightgrey","darkgreen")),
+                                drop.levels = TRUE,
+                                displaynames = c("Histological Subtype",
+                                                 "Cluster assignment from Bailey et al. 2016",
+                                                 "Sample type",
+                                                 "Purity (qpure)"))
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(adex = dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$ICGC.ADEX.Up),
+                                
+                                sampleTracks = c("adex"),
+                                colorlists = list(c("white", "deeppink")),
+                                displaynames = c(paste("ADEX")))
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE, error=TRUE, warning=F}
+heatmap.3(x = mat, 
+          scale = "row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = sampletree,
+          Rowv = FALSE,
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE, error=T, warning=F}
+heatmap.3(x = mat, 
+          scale = "row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = convert_order_to_dendrogram(order( dataset$sampInfo$membership.ordered[sampleset],
+                                                dataset$sampInfo$HistoSubtype[sampleset], 
+                                                
+                                                dataset$sampInfo$Sample.type[sampleset],
+                                                decreasing = TRUE,
+                                                na.last = FALSE)),
+          Rowv = FALSE,
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+```
+
+# Consensus clustering
+```{r,fig.width=4,fig.height=4, echo = FALSE, warning=F}
+# =====================================================================
+# visualize expression in heat map
+
+sampleset <- which(!is.na(dataset$sampInfo$membership.ordered))
+
+tmp.k = 3
+tmp.ncusts = 3
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$ICGC.SAM$symbols[which(pdacR::gene_lists$ICGC.SAM$type %in% "ADEX")])))
+
+smallx <- (dataset$ex[featureset,sampleset])
+
+sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = t(as.matrix(smallx)),
+                                                         seed = 1234,
+                                                         pFeature = 0.8,
+                                                         pItem = 0.8,
+                                                         maxK = 6,
+                                                         reps=200,
+                                                         distance="pearson",
+                                                         clusterAlg="km")[[tmp.k]]$consensusTree
+
+# ------------------
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("HistoSubtype",
+                                                 "membership.ordered",
+                                                 "Sample.type",
+                                                 "qpure_score"),
+                                colorlists = list(c("deeppink","purple","navy","darkgreen","skyblue","lightgreen"),
+                                                  c("hotpink","darkred","navy","orangered"),
+                                                  c("darkgreen","navy","hotpink"),
+                                                  c("lightgrey","darkgreen")),
+                                drop.levels = TRUE,
+                                displaynames = c("Histological Subtype",
+                                                 "Cluster assignment from Bailey et al. 2016",
+                                                 "Sample type",
+                                                 "Purity (qpure)"))
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(adex = dataset$featInfo$SYMBOL[featureset] %in%
+                                                        pdacR::gene_lists$ICGC.ADEX.Up),
+                                
+                                sampleTracks = c("adex"),
+                                colorlists = list(c("white", "deeppink")),
+                                displaynames = c(paste("ADEX")))
+```
+
+```{r, fig.width=8, fig.height=8, echo = FALSE, error=TRUE, warning=F}
+heatmap.3(x = smallx, 
+          scale = "row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = convert_order_to_dendrogram(order( dataset$sampInfo$membership.ordered[sampleset],
+                                                dataset$sampInfo$HistoSubtype[sampleset], 
+                                                
+                                                dataset$sampInfo$Sample.type[sampleset],
+                                                decreasing = TRUE,
+                                                na.last = FALSE)),
+          Rowv = as.dendrogram(sampletree),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+```
+
+## Exocrine and ADEX in PACA_AU_seq
+```{r,fig.width=4,fig.height=4, echo=F, warning=F}
+
+ggplot(dat = dataset$sampInfo, aes(y = Collisson.Exocrine,
+                                   x = qpure_score)) +
+  geom_point(alpha = 0.5,
+             size = 4,
+             aes(color = HistoSubtype,
+                 shape = Sample.type))+
+  scale_color_manual(values = c("Acinar Cell Carcinoma" = "deeppink",
+                                "Intraductal Papillary Mucinous Neoplasm with invasion" = "purple",
+                                "Pancreatic Ductal Adenocarcinoma" = "navy",
+                                "PDA -  signet ring" = "darkgreen",
+                                "PDA - Adenosquamous carcinoma" = "skyblue",
+                                "PDA - Undifferentiated (anaplastic) carcinoma" = "lightgreen")) +
+  
+  theme_pubr() +
+  labs(title = "PACA-AU RNAseq samples") +
+  ylab("Exocrine signature average") +
+  xlab("Purity (qpure)")
+
+ggplot(dat = dataset$sampInfo, aes(y = ICGC.ADEX.Up, 
+                                   x = qpure_score)) +
+  geom_point(alpha = 0.5, 
+             size = 4,
+             aes(color = HistoSubtype,
+                 shape = Sample.type)) +
+  scale_color_manual(values = c("Acinar Cell Carcinoma" = "deeppink",
+                                "Intraductal Papillary Mucinous Neoplasm with invasion" = "purple",
+                                "Pancreatic Ductal Adenocarcinoma" = "navy",
+                                "PDA -  signet ring" = "darkgreen",
+                                "PDA - Adenosquamous carcinoma" = "skyblue",
+                                "PDA - Undifferentiated (anaplastic) carcinoma" = "lightgreen")) +
+  theme_pubr() +
+  labs(title = "PACA-AU RNAseq samples") +
+  ylab("ADEX signature average") +
+  xlab("Purity (qpure)") 
+```
+
+```{r, fig.height=6, fig.width=6, echo=F}
+dataset$sampInfo$likeandy <- "Other hist."
+
+dataset$sampInfo$likeandy[dataset$sampInfo$HistoSubtype %in% "Pancreatic Ductal Adenocarcinoma" &
+
+                       dataset$sampInfo$Sample.type %in% "Metastatic tumour"] <- "Met. PDAC"
+
+dataset$sampInfo$likeandy[dataset$sampInfo$HistoSubtype %in% "Pancreatic Ductal Adenocarcinoma" &
+
+                       dataset$sampInfo$Sample.type %in% "Primary tumour"] <- "Primary PDAC"
+
+dataset$sampInfo$likeandy[dataset$sampInfo$HistoSubtype %in% "Acinar Cell Carcinoma"] <- "ACC"
+
+dataset$sampInfo$likeandy <- droplevels(factor(dataset$sampInfo$likeandy))
+
+ 
+
+#match aguirre aesthetics
+
+ggplot(dat = subset(dataset$sampInfo,Sample.type %in% c("Metastatic tumour","Primary tumour")),
+       aes(y = Collisson.Exocrine,
+           x = qpure_score)) +
+  geom_point(alpha = 0.8,
+             shape = 21,
+             size = 5,
+             aes(fill = likeandy)) +
+  scale_fill_manual(values = c("ACC" = "black",
+                                "Primary PDAC" = "#619CFF",
+                                "Met. PDAC" = "#F8766D",
+                                "Other hist." = "grey")) +
+  theme_pubr() +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(title = "PACA-AU RNAseq samples",color="Type") +
+  ylab("Exocrine signature average") +
+  xlab("Purity (qpure)")
+
+#match aguirre aesthetics
+
+ggplot(dat = subset(dataset$sampInfo,Sample.type %in% c("Metastatic tumour","Primary tumour")),
+       aes(y = ADEX_unique,
+           x = qpure_score)) +
+  geom_point(alpha = 0.8,
+             shape = 21,
+             size = 5,
+             aes(fill = likeandy)) +
+  scale_fill_manual(values = c("ACC" = "black",
+                                "Primary PDAC" = "#619CFF",
+                                "Met. PDAC" = "#00BA38",
+                                "Other hist." = "grey")) +
+  theme_pubr() +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(title = "PACA-AU RNAseq samples",color="Type") +
+  ylab("ADEX signature average") +
+  xlab("Purity (qpure)")
+
+# molgrad and purist
+ggplot(dat = subset(dataset$sampInfo,Sample.type %in% c("Metastatic tumour","Primary tumour")),
+       aes(y = purIST,
+           x = qpure_score)) +
+  geom_point(alpha = 0.8,
+             shape = 21,
+             size = 5,
+             aes(fill = likeandy)) +
+  scale_fill_manual(values = c("ACC" = "black",
+                                "Primary PDAC" = "#619CFF",
+                                "Met. PDAC" = "#00BA38",
+                                "Other hist." = "grey")) +
+  theme_pubr() +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(title = "PACA-AU RNAseq samples",color="Type") +
+  ylab("purIST") +
+  xlab("Purity (qpure)")
+
+ggplot(dat = subset(dataset$sampInfo,Sample.type %in% c("Metastatic tumour","Primary tumour")),
+       aes(y = molgrad_PDX,
+           x = qpure_score)) +
+  geom_point(alpha = 0.8,
+             shape = 21,
+             size = 5,
+             aes(fill = likeandy)) +
+  scale_fill_manual(values = c("ACC" = "black",
+                                "Primary PDAC" = "#619CFF",
+                                "Met. PDAC" = "#00BA38",
+                                "Other hist." = "grey")) +
+  theme_pubr() +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(title = "PACA-AU RNAseq samples",color="Type") +
+  ylab("molgrad_PDX") +
+  xlab("Purity (qpure)")
+```
+
+<!-- ## Exocrine and ADEX in Aguirre biopsies dataset -->
+```{r,fig.width=5,fig.height=5, echo=F, include=F, warning=F}
+
+# df <- pdacR::PACA_CA_seq
+# 
+# 
+# geneMeans <- rowMeans(df$ex)
+# genesToDelete <- which(geneMeans < .01)
+# 
+#   df$ex <- sqrt(df$ex[-genesToDelete,])
+# df$featInfo <- df$featInfo[-genesToDelete,]
+# 
+# gene_lists <- pdacR::gene_lists
+# 
+# 
+# df$sampInfo$qpure_score <- 
+#   as.numeric(as.character(df$sampInfo$qpure_score))
+# 
+# 
+# # =====================================================================
+# # Calculate expression scores
+# 
+# gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+# gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+# gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+# gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+# 
+# for(i in names(gene_lists)){
+#   this_gene_list <- gene_lists[[i]]
+#   if(class(this_gene_list) %in% "data.frame"){
+#     this_gene_list <- this_gene_list[,1]
+#   }
+#   tmp <- which(df$featInfo$SYMBOL %in% this_gene_list)
+#   df$sampInfo[i] <- colMeans((df$ex[tmp,]),na.rm = TRUE)
+# }
+# 
+# 
+# 
+# ggplot(dat = df$sampInfo, aes(y = Collisson.Exocrine,
+#                                    x = qpure_score)) +
+#   geom_point(alpha = 0.5,
+#              size = 4,
+#              aes(color = HistoSubtype,
+#                  shape = Sample.type))+
+#   scale_color_manual(values = c("Acinar Cell Carcinoma" = "deeppink",
+#                                 "Intraductal Papillary Mucinous Neoplasm with invasion" = "purple",
+#                                 "Pancreatic Ductal Adenocarcinoma" = "navy",
+#                                 "PDA -  signet ring" = "darkgreen",
+#                                 "PDA - Adenosquamous carcinoma" = "skyblue",
+#                                 "PDA - Undifferentiated (anaplastic) carcinoma" = "lightgreen")) +
+#   
+#   theme_pubr() +
+#   labs(title = "PACA-AU RNAseq samples") +
+#   ylab("Exocrine signature average") +
+#   xlab("Purity (qpure)")
+# 
+# ggplot(dat = df$sampInfo, aes(y = ICGC.ADEX.Up, 
+#                                    x = qpure_score)) +
+#   geom_point(alpha = 0.5, 
+#              size = 4,
+#              aes(color = HistoSubtype,
+#                  shape = Sample.type)) +
+#   scale_color_manual(values = c("Acinar Cell Carcinoma" = "deeppink",
+#                                 "Intraductal Papillary Mucinous Neoplasm with invasion" = "purple",
+#                                 "Pancreatic Ductal Adenocarcinoma" = "navy",
+#                                 "PDA -  signet ring" = "darkgreen",
+#                                 "PDA - Adenosquamous carcinoma" = "skyblue",
+#                                 "PDA - Undifferentiated (anaplastic) carcinoma" = "lightgreen")) +
+#   theme_pubr() +
+#   labs(title = "PACA-AU RNAseq samples") +
+#   ylab("ADEX signature average") +
+#   xlab("Purity (qpure)") 
+```
+
+```{r, fig.height=6, fig.width=6, echo = F, include=F, warning=F}
+# df$sampInfo$likeandy <- "Other hist."
+# 
+# df$sampInfo$likeandy[df$sampInfo$HistoSubtype %in% "Pancreatic Ductal Adenocarcinoma" &
+# 
+#                        df$sampInfo$Sample.type %in% "Metastatic tumour"] <- "Met. PDAC"
+# 
+# df$sampInfo$likeandy[df$sampInfo$HistoSubtype %in% "Pancreatic Ductal Adenocarcinoma" &
+# 
+#                        df$sampInfo$Sample.type %in% "Primary tumour"] <- "Primary PDAC"
+# 
+# df$sampInfo$likeandy[df$sampInfo$HistoSubtype %in% "Acinar Cell Carcinoma"] <- "ACC"
+# 
+# df$sampInfo$likeandy <- droplevels(factor(df$sampInfo$likeandy))
+# 
+#  
+# 
+# #match aguirre aesthetics
+# 
+# ggplot(dat = subset(df$sampInfo,df$sampInfo$Sample.type %in% c("Metastatic tumour","Primary tumour")),
+#        aes(y = Collisson.Exocrine,
+#            x = qpure_score)) +
+#   geom_point(alpha = 0.8,
+#              shape = 21,
+#              size = 5,
+#              aes(fill = likeandy)) +
+#   scale_fill_manual(values = c("ACC" = "black",
+#                                 "Primary PDAC" = "#619CFF",
+#                                 "Met. PDAC" = "#F8766D",
+#                                 "Other hist." = "grey")) +
+#   theme_pubr() +
+#   scale_x_continuous(limits = c(0, 100)) +
+#   labs(title = "PACA-AU RNAseq samples",color="Type") +
+#   ylab("Exocrine signature average") +
+#   xlab("Purity (qpure)")
+# 
+# #match aguirre aesthetics
+# 
+# ggplot(dat = subset(df$sampInfo,df$sampInfo$Sample.type %in% c("Metastatic tumour","Primary tumour")),
+#        aes(y = ADEX_unique,
+#            x = qpure_score)) +
+#   geom_point(alpha = 0.8,
+#              shape = 21,
+#              size = 5,
+#              aes(fill = likeandy)) +
+#   scale_fill_manual(values = c("ACC" = "black",
+#                                 "Primary PDAC" = "#619CFF",
+#                                 "Met. PDAC" = "#00BA38",
+#                                 "Other hist." = "grey")) +
+#   theme_pubr() +
+#   scale_x_continuous(limits = c(0, 100)) +
+#   labs(title = "PACA-AU RNAseq samples",color="Type") +
+#   ylab("ADEX signature average") +
+#   xlab("Purity (qpure)")
+```
+
+
+```{r, fig.width=6, fig.height=6, error=TRUE, echo=F}
+
+# ggplot(data = dataset$sampInfo, aes(x = HistoSubtype,
+#                                     y = qpure_score,
+#                                     fill = HistoSubtype)) +
+#   geom_boxplot(aes(stat = "identity")) + 
+#   theme_pubr() +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# 
+# for(genes in noquote(names(gene_lists))) {
+#   
+#   d <- data.frame(score = dataset$sampInfo[[genes]],
+#                   type = dataset$sampInfo$HistoSubtype)
+#   
+#   p <- ggplot(data = d, aes(x = type,
+#                             y = score,
+#                             fill = type)) +
+#   geom_dotplot(aes(fill = type),
+#                  binaxis='y', 
+#                  stackdir='center',
+#                  binwidth = 0.115,
+#                  dotsize=10) + 
+#   ylim(0,10) +
+#   theme_pubr() +
+#   labs(title = genes) +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+#   
+#   print(p)
+# }
+
+```

@@ -1,0 +1,572 @@
+---
+title: "ICGC PACA-CA clustering"
+author: "Ryan Kawalerski"
+date: "September 17, 2018"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+# Setup for PACA_CA
+## Load required libraries
+```{r setup, include=FALSE, echo=F, warning=F}
+library(pdacR)
+library(ggplot2)
+library(reshape2)
+library(GGally)
+library(sva)
+library(plyr)
+library(tinytex)
+library(ggpubr)
+library(survival)
+library(ggrepel)
+library(pdacmolgrad)
+```
+
+## Select dataset and remove unwanted genes
+```{r, echo=F}
+
+dataset <- pdacR::PACA_CA_seq
+
+geneMeans <- rowMeans(dataset$ex)
+genesToDelete <- which(geneMeans < .01)
+
+dataset$ex <- log2(1+dataset$ex[-genesToDelete,])
+dataset$featInfo <- dataset$featInfo[-genesToDelete,]
+
+gene_lists <- pdacR::gene_lists
+
+```
+
+## Calculate signature scores and SSC
+```{r, echo = FALSE, warning=F, message=FALSE, results='hide'}
+# =====================================================================
+# perform single sample classifier for guidance
+
+tumor.classifier <- Moffitt_classifier_2019
+
+dataset$sampInfo$SST_subtypes<- as.numeric(create.classif(dat=dataset$ex,
+                                              fit=tumor.classifier$fit,
+                                              classifier=tumor.classifier)$predprob)
+
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+
+# =====================================================================
+# Calculate expression scores
+for(i in names(gene_lists)){
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  tmp <- which(dataset$featInfo$SYMBOL %in% this_gene_list)
+  dataset$sampInfo[i] <- colMeans((dataset$ex[tmp,]),na.rm = TRUE)
+}
+# ======================================================================
+# Append purIST and molgrad predictions
+temp <- projectMolGrad(dataset$ex,
+                       geneSymbols = dataset$featInfo$SYMBOL)
+names(temp) <- paste0('molgrad_', names(temp))
+temp$icgc_sample_id <- rownames(temp)
+# print(head(temp))
+
+dataset$sampInfo <- join(dataset$sampInfo,
+                         temp,
+                         by = 'icgc_sample_id')
+tmp <- as.matrix(dataset$ex)
+rownames(tmp) <- dataset$featInfo$SYMBOL
+dataset$ex <- tmp
+dataset$sampInfo$purIST <- as.numeric(create.classif(dataset$ex,
+                                                     Moffitt_classifier_2019,
+                                                     fit = Moffitt_classifier_2019$fit)$predprob)
+dataset$sampInfo$molgrad_scaled <- GGally::rescale01(dataset$sampInfo$molgrad_PDX)
+```
+
+## Append TSP scores to expression data frames
+```{r, echo = FALSE}
+# Nanostring classifier
+# --------------------------------------
+# Old
+# tmp <- create.classif(dat=dataset$ex, 
+#                       fit=tumor.classifier$fit, 
+#                       classifier=tumor.classifier) 
+# 
+# gene_lists$TSP.tumor <- rownames(tmp$indmat) 
+# 
+# dataset$featInfo_new <- join(dataset$featInfo, 
+#                          data.frame(SYMBOL = rownames(tmp$indmat)), 
+#                          type = "full")
+# 
+# colnames(tmp$indmat) <- colnames(dataset$ex_new)
+# 
+# dataset$ex_new <- rbind(dataset$ex_new,
+#                     tmp$indmat)
+
+```
+
+# Results
+## Heat maps
+```{r, fig.width=4, fig.height=4, echo=F}
+sampleset <- 1:nrow(dataset$sampInfo)
+tmp.k <- 2
+tmp.ncusts <- 2
+
+
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Basal.25)))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Classical.25))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Normal.25))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Activated.25))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Collisson.Exocrine))))
+
+smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+
+sampletree <- convert_order_to_dendrogram(order(dataset$sampInfo$actual_type))
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("actual_type"),
+                                colorlists = list(c("chartreuse2", "orange", "black"),
+                                drop.levels = TRUE))
+
+
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(basal =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Basal.25,
+                                                      classical =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Classical.25,
+                                                      normal =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Normal.25,
+                                                      activated =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Activated.25,
+                                                      exocrine = dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Collisson.Exocrine),
+                                sampleTracks = c("basal",
+                                                 "classical",
+                                                 "normal",
+                                                 "activated",
+                                                 "exocrine"),
+                                colorlists = list(b=c("white","orange"),
+                                                  c=c("white","blue"),
+                                                  n=c("white","lightblue"),
+                                                  a=c("white","brown"),
+                                                  e=c("white","purple")))
+```
+
+```{r, fig.width=8, fig.height=8, echo=F}
+heatmap.3(x = smallx, 
+          scale="row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = sampletree,
+          dendrogram = c("column"),
+          Rowv = FALSE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+```
+
+## Boxplots to show gene expression in the above heatmap
+```{r, fig.height=4, fig.width=4, echo = FALSE, error = TRUE}
+df <- dataset
+
+for(genes in noquote(c(names(gene_lists),
+                       "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"))){
+  
+  d <- data.frame(score = df$sampInfo[,genes],
+                  type = df$sampInfo$actual_type)
+  
+  p <- ggplot(d, aes(y = score,
+                     x = type)) +
+    geom_dotplot(aes(fill = type),
+                 binaxis='y', 
+                 stackdir='center', 
+                 dotsize=1) +
+    stat_compare_means(ref.group = "Cell line") +
+    labs(title = paste(genes, " score")) +
+    theme_pubr()
+
+  print(p)
+
+}
+
+
+```
+
+# Setup for Moffitt S2
+## Select dataset and remove unwanted genes
+```{r, echo=F}
+
+dataset <- pdacR::Moffitt_S2
+
+geneMeans <- rowMeans(dataset$ex)
+genesToDelete <- which(geneMeans < .01)
+
+dataset$ex <- log2(1+dataset$ex[-genesToDelete,])
+dataset$featInfo <- dataset$featInfo[-genesToDelete,]
+
+gene_lists <- pdacR::gene_lists
+
+```
+
+<!-- ## Batch correction -->
+```{r, echo=F}
+# dataset$corrected <- ComBat(dat = dataset$ex,
+#                             batch = as.numeric(dataset$sampInfo$specimen_type))
+
+```
+
+## Generate PCA plots
+```{r, fig.width=8, fig.height=8, echo=F, warning=F,  message=FALSE, results='hide'}
+pca <- prcomp((dataset$ex))
+
+ggpairs(data = data.frame(data.frame(pca$rotation[,1:3]),
+                          kit = dataset$sampInfo$sample_type,
+                          sst = factor(dataset$sampInfo$sample_type)),
+                          columns = 1:5,
+                          aes(color = sst))
+
+# pca <- prcomp((dataset$corrected))
+# 
+# ggpairs(data = data.frame(data.frame(pca$rotation[,1:3]),
+#                           kit = dataset$sampInfo$specimen_type,
+#                           sst = factor(dataset$sampInfo$specimen_type)),
+#                           columns = 1:5,
+#                           aes(color = sst))
+```
+
+## Calculate signature scores and SSC
+```{r, echo = FALSE,  message=FALSE, results='hide', warning=F}
+# =====================================================================
+# perform single sample classifier for guidance
+
+tumor.classifier <- Moffitt_classifier_2015
+
+dataset$sampInfo$SST_subtypes<- as.numeric(create.classif(dat=dataset$ex,
+                                              fit=tumor.classifier$fit,
+                                              classifier=tumor.classifier)$predprob)
+
+
+
+gene_lists$ADEX_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "ADEX")]
+gene_lists$Immunogenic_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Immunogenic")]
+gene_lists$Progenitor_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Pancreatic progenitor")]
+gene_lists$Squamous_unique <- gene_lists$ICGC.SAM$symbols[which(gene_lists$ICGC.SAM$type %in% "Squamous")]
+
+
+
+# =====================================================================
+# Calculate expression scores
+for(i in names(gene_lists)){
+  this_gene_list <- gene_lists[[i]]
+  if(class(this_gene_list) %in% "data.frame"){
+    this_gene_list <- this_gene_list[,1]
+  }
+  tmp <- which(dataset$featInfo$SYMBOL %in% this_gene_list)
+  dataset$sampInfo[i] <- colMeans((dataset$ex[tmp,]),na.rm = TRUE)
+}
+
+# ======================================================================
+# Append purIST and molgrad predictions
+temp <- projectMolGrad(dataset$ex,
+                       geneSymbols = dataset$featInfo$SYMBOL)
+names(temp) <- paste0('molgrad_', names(temp))
+temp$joiner <- rownames(temp)
+dataset$sampInfo$joiner <- rownames(dataset$sampInfo)
+print(head(temp))
+
+dataset$sampInfo <- join(dataset$sampInfo,
+                         temp,
+                         by = 'joiner')
+tmp <- as.matrix(dataset$ex)
+rownames(tmp) <- dataset$featInfo$SYMBOL
+dataset$ex <- tmp
+dataset$sampInfo$purIST <- as.numeric(create.classif(dataset$ex,
+                                                     Moffitt_classifier_2019,
+                                                     fit = Moffitt_classifier_2019$fit)$predprob)
+dataset$sampInfo$molgrad_scaled <- GGally::rescale01(dataset$sampInfo$molgrad_PDX)
+```
+
+## Append TSP scores to expression data frames
+```{r, echo = FALSE}
+# Nanostring classifier
+# --------------------------------------
+# Old
+# tmp <- create.classif(dat=dataset$ex, 
+#                       fit=tumor.classifier$fit, 
+#                       classifier=tumor.classifier) 
+# 
+# gene_lists$TSP.tumor <- rownames(tmp$indmat) 
+# 
+# dataset$featInfo_new <- join(dataset$featInfo, 
+#                          data.frame(SYMBOL = rownames(tmp$indmat)), 
+#                          type = "full")
+# 
+# colnames(tmp$indmat) <- colnames(dataset$ex_new)
+# 
+# dataset$ex_new <- rbind(dataset$ex_new,
+#                     tmp$indmat)
+
+
+```
+
+# Results
+## Heat maps
+```{r, fig.width=8, fig.height=6, echo=F}
+sampleset <- 1:nrow(dataset$sampInfo)
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$ICGC.Immunogenic.Up) ) &
+                    dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$ICGC.SAM[[1]]) ) )
+
+#smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+smallx <- dataset$ex[featureset,sampleset]
+
+sampletree <- convert_order_to_dendrogram(order(dataset$sampInfo$sample_type))
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("sample_type"),
+                                colorlists = list(c("dodgerblue2", "chartreuse2", "orange", "black"),
+                                drop.levels = TRUE))
+
+
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(immunogenic =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$ICGC.Immunogenic.Up,
+                                                      ADEX =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$ICGC.ADEX.Up,
+                                                      progenitor =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$ICGC.Progenitor.Up,
+                                                      classical =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Classical.25,
+                                                      squamous =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$ICGC.Squamous.Up,
+                                                      SAM =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$ICGC.SAM[[1]]),
+                                sampleTracks = c("immunogenic",
+                                                 "ADEX",
+                                                 "progenitor",
+                                                 "classical",
+                                                 "squamous",
+                                                 "SAM"),
+                                colorlists = list(i = c("white", "darkred"),
+                                                  a = c("white", "deeppink"),
+                                                  p = c("white", "blue"),
+                                                  c = c("white", "blue"),
+                                                  s = c("white", "orange"),
+                                                  S = c("white", "grey") ) )
+
+heatmap.3(x = smallx, 
+          scale="row",
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = sampletree,
+          dendrogram = c("row"),
+          labCol = "",
+          labRow = "",
+          Rowv = TRUE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 1,
+          RowSideColorsSize = 4,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(10,10))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+
+print("% of progentior overlap with immunogenic")
+print(length(which(pdacR::gene_lists$ICGC.Immunogenic.Up %in% pdacR::gene_lists$ICGC.Progenitor.Up)) / length(pdacR::gene_lists$ICGC.Immunogenic.Up))
+
+print("% of ADEX overlap with immunogenic")
+print(length(which(pdacR::gene_lists$ICGC.Immunogenic.Up %in% pdacR::gene_lists$ICGC.ADEX.Up)) / length(pdacR::gene_lists$ICGC.Immunogenic.Up))
+```
+
+
+```{r, fig.width=4, fig.height=4, echo=F}
+sampleset <- 1:nrow(dataset$sampInfo)
+tmp.k <- 2
+tmp.ncusts <- 2
+
+featureset <- which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Basal.25)))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Classical.25))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Collisson.QM))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Collisson.Classical))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Normal.25))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Moffitt.Activated.25))))
+
+featureset <- c(featureset, which(dataset$featInfo$SYMBOL %in% 
+                      c(as.character(pdacR::gene_lists$Collisson.Exocrine))))
+
+
+
+
+smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+
+sampletree <- convert_order_to_dendrogram(order(dataset$sampInfo$sample_type))
+
+ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+                                sampleTracks = c("sample_type"),
+                                colorlists = list(c("dodgerblue2", "chartreuse2", "orange", "black"),
+                                drop.levels = TRUE))
+
+
+
+RowSideColors <-  getSideColors(sampInfo = data.frame(basal =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Normal.25,
+                                                      classical =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Classical.25,
+                                                      qm =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Collisson.QM,
+                                                      col.classical =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Collisson.Classical,
+                                                      normal =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Normal.25,
+                                                      activated =dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Moffitt.Activated.25,
+                                                      exocrine = dataset$featInfo$SYMBOL[featureset] %in% 
+                                                        pdacR::gene_lists$Collisson.Exocrine),
+                                sampleTracks = c("basal",
+                                                 "classical",
+                                                 "qm",
+                                                 "col.classical",
+                                                 "normal",
+                                                 "activated",
+                                                 "exocrine"),
+                                colorlists = list(b=c("white","orange"),
+                                                  c=c("white","blue"),
+                                                  qm = c("white", "darkgreen"),
+                                                  cc = c("white", "deeppink"),
+                                                  n=c("white","lightblue"),
+                                                  a=c("white","brown"),
+                                                  e=c("white","purple")))
+```
+
+```{r, fig.width=8, fig.height=8, echo=F}
+heatmap.3(x = smallx, 
+          scale="row",
+          labRow = dataset$featInfo$SYMBOL[featureset],
+          col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+          Colv = sampletree,
+          dendrogram = c("column"),
+          Rowv = FALSE,
+          distfun = function(x) as.dist((1-cor(t(x)))/2),
+          ColSideColors = ColSideColors$SideColors,
+          ColSideColorsSize = 6,
+          RowSideColorsSize = 6,
+          RowSideColors = t(RowSideColors$SideColors),
+          margins = c(5,20))
+legend(xy.coords(x=.90,y=1),
+       legend=c(ColSideColors$text),
+       fill=c(ColSideColors$colors),
+       border=FALSE, bty="n",
+       y.intersp = 0.9, cex=0.5)
+```
+
+## Boxplots to show gene expression in the above heatmap
+```{r, fig.height=6, fig.width=6, echo = FALSE, error = TRUE}
+df <- dataset
+
+IDs <- sapply(X = df$sampInfo$publicID,
+              FUN = function(x){
+                y <- strsplit(x = as.character(x),
+                              split = "-",
+                              fixed = TRUE)
+                return(as.numeric(y[[1]][2]))
+              })
+
+df$sampInfo$easyID <- IDs
+
+noscale <- c("molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled")
+
+for(genes in noquote(c(names(gene_lists),
+                       "molgrad_PDX",
+                        "molgrad_Puleo",
+                        "molgrad_ICGCarray",
+                        "molgrad_ICGCrnaseq",
+                        "purIST",
+                        "molgrad_scaled"))){
+  
+  if(genes %in% noscale){
+    d <- data.frame(score = df$sampInfo[,genes],
+                  type = df$sampInfo$sample_type,
+                  ID = df$sampInfo$easyID)
+    p <- ggplot(d, aes(y = score,
+                     x = type)) +
+    geom_dotplot(aes(fill = type),
+                 binaxis='y', 
+                 stackdir='center',
+                 binwidth = 0.05,
+                 dotsize= 0.5) +
+    stat_compare_means(ref.group = "Primary") +
+    labs(title = paste(genes, " score")) +
+    theme_pubr()
+
+  print(p)
+  }else{
+    d <- data.frame(score = scale(df$sampInfo[,genes],
+                              center = TRUE,
+                              scale = TRUE),
+                type = df$sampInfo$sample_type,
+                ID = df$sampInfo$easyID)
+    p <- ggplot(d, aes(y = score,
+                     x = type)) +
+    geom_dotplot(aes(fill = type),
+                 binaxis='y', 
+                 stackdir='center',
+                 binwidth = 0.115,
+                 dotsize=1.25) +
+    stat_compare_means(ref.group = "Primary") +
+    ylim(-2.1,4) +
+    labs(title = paste(genes, " score")) +
+    theme_pubr()
+
+  print(p)
+  }
+}
+```
+
