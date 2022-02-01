@@ -81,6 +81,9 @@ if (!require("Seurat")) {
 if (!require("mosaic")) {
   install.packages("mosaic")
 }
+if (!require("Cairo")) {
+  install.packages("Cairo")
+}
 
 myversion <- as.numeric(R.Version()$major)+0.1*as.numeric(R.Version()$minor)
 if( myversion < 3.5){

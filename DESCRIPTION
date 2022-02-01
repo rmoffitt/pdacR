@@ -8,7 +8,7 @@ Description: Downloads and prepares public PDAC data for analysis, and provides 
 License: MIT
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 Suggests: testthat,
           decoderr
 biocViews:
