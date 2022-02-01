@@ -213,17 +213,17 @@ parse_gene_lists <- function() {
   }
 
   ## =============================
-  # from Chang-Sue et al, Nature Genetics, 2019
+  # from Chan-Seng-Yue et al, Nature Genetics, 2019
   ## =============================
   tmpFname <- system.file("extdata/gene_lists", "Notta_supplement.xlsx", package = "pdacR")
-  Chan_Sen_Yue <- read.xlsx(tmpFname,
+  Chan_Seng_Yue <- read.xlsx(tmpFname,
                      sheet = "Supplementary Table 4",
                      startRow = 2)
-  Chan_Sen_Yue = Chan_Sen_Yue[,c("Sig..2.genes","Sig..10.genes","Sig..1.genes","Sig..6.genes")]
-  names(Chan_Sen_Yue) = c("BasalA","BasalB","ClassicalA","ClassicalB")
+  Chan-Seng-Yue = Chan-Seng-Yue[,c("Sig..2.genes","Sig..10.genes","Sig..1.genes","Sig..6.genes")]
+  names(Chan-Seng-Yue) = c("BasalA","BasalB","ClassicalA","ClassicalB")
 
-  for(i in 1:ncol(Chan_Sen_Yue)){
-    gene_lists[[paste0("Chan_Sen_Yue.",names(Chan_Sen_Yue)[i])]] <- as.character(na.omit(Chan_Sen_Yue[,i]))
+  for(i in 1:ncol(Chan-Seng-Yue)){
+    gene_lists[[paste0("Chan-Seng-Yue.",names(Chan-Seng-Yue)[i])]] <- as.character(na.omit(Chan-Seng-Yue[,i]))
   }
 
   ## =============================
