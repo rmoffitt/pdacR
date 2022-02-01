@@ -18,7 +18,7 @@ parse_TCGA_PAAD <- function() {
   ## =============================
   expression_file <- system.file("extdata/TCGA_PAAD",
                                  "PAAD.183.FullSet.fixed_20141109.txt",
-                                 package = "pdac")
+                                 package = "pdacR")
   ex <- read.table(file = expression_file,header = TRUE)
   ex <- ex[-1,]
   rownames(ex) <- ex[,1]
@@ -32,7 +32,7 @@ parse_TCGA_PAAD <- function() {
   ## =============================
   sample_table_file <- system.file("extdata/TCGA_PAAD",
                                    "Supplemental_Table_1_PAAD_sample_table_for_TCGA.xlsx",
-                                   package = "pdac")
+                                   package = "pdacR")
   #---------------
   sample_table_1 <- read.xlsx(xlsxFile = sample_table_file,
                               sheet = 1)
