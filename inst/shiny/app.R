@@ -19,6 +19,7 @@ library(survival)
 library(survminer)
 library(scales)
 #library(umapr)
+library(DESeq2)
 
 
 print(sessionInfo())
@@ -616,29 +617,13 @@ server <- function(input, output) {
                                "Array"),
                    selected = character(0))
     }
-    else if(meta$exp.type == "RNAseq"){
+    else{
       radioButtons(inputId = "exp.type",
                    label = "Experiment Type",
                    choices = c("scRNA",
                                "RNAseq",
                                "Array"),
-                   selected = "RNAseq")
-    }
-    else if(meta$exp.type == "Array"){
-      radioButtons(inputId = "exp.type",
-                   label = "Experiment Type",
-                   choices = c("scRNA",
-                               "RNAseq",
-                               "Array"),
-                   selected = "Array")
-    }
-    else if (meta$exp.type == "scRNA"){
-      radioButtons(inputId = "exp.type",
-                   label = "Experiment Type",
-                   choices = c("scRNA",
-                               "RNAseq",
-                               "Array"),
-                   selected = "scRNA")
+                   selected = meta$exp.type)
     }
   })
   # ================================================================
@@ -733,10 +718,10 @@ server <- function(input, output) {
     tracks <- getSampleTracks()
 
     x <- isolate(dataSet())
-    cts <- 2^(x$ex-1)
     coldata <- x$sampInfo
     tracks <- coldata[names(coldata) == tracks]
 
+    cts = x$ex
     if (anyNA(tracks[[1]])){
       print(". . . There are NA's in this track, trimming . . .")
       not.NA <- !is.na(tracks[[1]])
@@ -755,34 +740,56 @@ server <- function(input, output) {
     replace <- which(colnames(coldata) %in% getSampleTracks())
     colnames(coldata)[replace] <- "use"
 
-    if("scRNA" %in% input$exp.type){
+    ## Remove samples not within the A vs B comparison
+    comparisons = which(coldata$use %in% c(input$contrastA,input$contrastB))
+    coldata = droplevels(coldata[comparisons,])
+    cts = cts[,comparisons]
+
+    if(input$exp.type == "scRNA"){
       # quick and dirty b/c its exploratory
-      change <- cbind(rowMeans(x$ex[,which(coldata$use == input$contrastA)]),
-                      rowMeans(x$ex[,which(coldata$use == input$contrastB)]))
+      change <- cbind(numerator = rowMeans(cts[,which(coldata$use == input$contrastA)]),
+                      denominator = rowMeans(cts[,which(coldata$use == input$contrastB)]))
 
       test.res <- numeric(length = nrow(cts))
       for(i in 1:nrow(cts)){
-        test.res[i] <- t.test(x$ex[i,which(coldata$use == input$contrastA)],
-                              x$ex[i,which(coldata$use == input$contrastB)])$p.value
+        test.res[i] <- t.test(cts[i,which(coldata$use == input$contrastA)],
+                              cts[i,which(coldata$use == input$contrastB)])$p.value
       }
 
       globals$res <- data.frame(labels = x$featInfo$SYMBOL,
                                 padj = test.res,
-                                log2FoldChange = log2(change[,1]/change[,2]),
+                                log2FoldChange = log2(change$numerator/change$denominator),
                                 row.names = x$featInfo$SYMBOL
       )
     }
-    else if(input$exp.type %in% c("RNAseq", "Array")){
-
+    else if(input$exp.type == "Array"){
+      ## Expects log normalized data, no change
       rownames(cts) <- x$featInfo$SYMBOL
+
+      ## Relevel to make contrastB the intercept
+      coldata$use = relevel(coldata$use, ref = input$contrastB)
       design <- model.matrix(~ coldata$use)
       fit <- lmFit(cts, design)
       fit <- eBayes(fit)
-      globals$res <- topTable(fit, n = nrow(fit))[,
-                                                  c("logFC","adj.P.Val")]
+      globals$res <- topTable(fit, n = nrow(fit))
+      print(summary(globals$res))
+      globals$res = globals$res[,c("logFC","adj.P.Val")]
       colnames(globals$res) <- c("log2FoldChange", "padj")
       globals$res$labels <- x$featInfo$SYMBOL[as.numeric(rownames(globals$res))]
 
+    } else {
+      ## Undo lognormalization below, easier than replicating parsing (for now)
+      cts <- 2^(cts)-1
+      cts = apply(cts,2,FUN = function(x){round(x) %>% as.integer()})
+
+      dds <- DESeqDataSetFromMatrix(countData = cts,
+                                    colData = coldata,
+                                    design = ~ use)
+      dds <- DESeq(dds)
+
+      globals$res = as.data.frame(results(dds, contrast = c("use",input$contrastA,input$contrastB)))
+      globals$res$labels = x$featInfo$SYMBOL[as.numeric(rownames(globals$res))]
+      #print(summary(globals$res))
     }
 
 
@@ -810,6 +817,7 @@ server <- function(input, output) {
     globals$genes2color = NULL
 
     for (i in globals$res$labels){
+     # print(i)
       if (i %in% set){
         print(paste(i, "is present"))
         globals$genes2color <- c(globals$genes2color,i)
@@ -2193,10 +2201,10 @@ server <- function(input, output) {
     globals$res$subtype <- factor(ifelse(globals$res$labels %in% globals$genes2color, "present", "absent"))
 
     by_subtype <- globals$res[order(globals$res$subtype),]
-    by_subtype$log2FoldChange[by_subtype$log2FoldChange > 20] = 20
-    by_subtype$log2FoldChange[by_subtype$log2FoldChange < -20] = -20
-    by_subtype$padj[by_subtype$padj < .000000000000001] = .000000000000001
-    by_subtype$both_cutoff <- by_subtype$padj < .05 & abs(by_subtype$log2FoldChange) > 2
+    # by_subtype$log2FoldChange[by_subtype$log2FoldChange > 20] = 20
+    # by_subtype$log2FoldChange[by_subtype$log2FoldChange < -20] = -20
+    # by_subtype$padj[by_subtype$padj < .000000000000001] = .000000000000001
+    by_subtype$both_cutoff <- by_subtype$padj < .05 & abs(by_subtype$log2FoldChange) > 1
 
     e <- ggplot(by_subtype, aes(x = log2FoldChange, y = -log10(padj), label = labels))
     e <- e + geom_point(aes(color = subtype))
@@ -2217,7 +2225,7 @@ server <- function(input, output) {
                   x = expression('log'[2]*'fold change'),
                   title = (paste0("Differential Expression of genes comparing ",
                                   input$contrastA,"/", input$contrastB)))
-    e <- e + xlim(-15,15) + ylim(0,15)
+    #e <- e + xlim(-15,15) + ylim(0,15)
     e <- e + geom_hline(yintercept = 1.3, linetype = "dotted") + geom_vline(xintercept=c(-2,2), linetype="dotted")
     removeNotification(id = "DESeq_notification")
 
