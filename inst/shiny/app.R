@@ -1245,12 +1245,13 @@ server <- function(input, output) {
     f$f <- f$f[genesToPlot]
     f$g <- f$g[genesToPlot,,drop = FALSE]
 
+    ex2 <- t(scale(t(x$ex),center=TRUE,scale=TRUE))
     if(length(x$ex[,1])<2){
       Rowv <- FALSE
     } else if("Consensus" %in% input$geneClustertype){
       k <- input$geneSortBy
       Rowv <- as.dendrogram(
-        ConsensusClusterPlus::ConsensusClusterPlus(d = t(as.matrix(x$ex)),
+        ConsensusClusterPlus::ConsensusClusterPlus(d = t(as.matrix(ex2)),
                                                    seed = 1234,
                                                    maxK = k+1,
                                                    reps=50,
@@ -1258,17 +1259,17 @@ server <- function(input, output) {
                                                    clusterAlg="km")[[k]]$consensusTree)
 
     } else if("Pearson" %in% input$geneClustertype){
-      Rowv <- as.dendrogram( hclust( bioDist::cor.dist(x = (as.matrix(x$ex)) ) ) )
+      Rowv <- as.dendrogram( hclust( bioDist::cor.dist(x = (as.matrix(ex2)) ) ) )
 
 
     } else if("Euclidean" %in% input$geneClustertype){
-      Rowv <- as.dendrogram( hclust( dist(x = (as.matrix(x$ex)),
+      Rowv <- as.dendrogram( hclust( dist(x = (as.matrix(ex2)),
                                           method="euclidean")))
 
     } else if("K.Means" %in% input$geneClustertype){
       k <- input$geneSortBy
       set.seed(1234)
-      ProcessedKmeans <-(kmeans((x = (as.matrix(x$ex))),
+      ProcessedKmeans <-(kmeans((x = (as.matrix(ex2))),
                                 centers = k,
                                 iter.max = 25,
                                 nstart = 1))
