@@ -883,8 +883,11 @@ server <- function(input, output) {
     )
     x <- NULL
     for(selectedset in input$dataset){
-      selectedvariable <- globals$data_set_list$variablenames[globals$data_set_list$labels %in% selectedset]
-      y <- get(as.character(selectedvariable))
+      selectedvariable <- as.character(globals$data_set_list$variablenames[globals$data_set_list$labels %in% selectedset])
+      ## Point to .RData instead of installing it in package (help load times)
+      filename = paste0("/data/",selectedvariable,".rds")
+      print(filename)
+      y = readRDS(file = filename)
       y$sampInfo$source <- selectedset
       do.a.log.transform = TRUE # the default behavior
 
