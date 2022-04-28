@@ -5,6 +5,7 @@
 generate_data_set_list <- function() {
   data_set_list <- data.frame(labels=c(
     "Chen array, 2015",
+    "CPTAC3-PDA, 2022",
     "ICGC ILLUMINA arrays 2013",
     "ICGC PACA-AU array, 2016",
     "ICGC PACA-AU seq, 2016",
@@ -16,6 +17,7 @@ generate_data_set_list <- function() {
     "Seino array, 2018",
     "TCGA PAAD, 2017"),
     variablenames =c("Chen_GEO_array",
+                     "CPTAC_exp",
                      "Nones_GEO_array",
                      "PACA_AU_array",
                      "PACA_AU_seq",

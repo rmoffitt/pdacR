@@ -20,15 +20,30 @@ Or using the RStudio build pane as explained [here](https://support.rstudio.com/
 
 Parsed datasets can be found in the `data` directory, with corresponding raw data in `inst/extdata`
 
-## Using the RShiny app
+## Using the RShiny app (works for both local and web instances)
 
 To host a local instance of the app, run `pdacR::pdacShiny()`
+To use a web instance, navigate to http://pdacr.bmi.stonybrook.edu/pdac
+
+### The Big Buttons
+
+When you load the app, you will first see 4 tabs across the top:
+
+<img src="images/tabs.png" width="60%"/>
+
+Each of the 4 tabs uses the same 5 main options (dataset, filter, geneset, manual genes/cluster method, sample tracks) from the columns below, and are detailed at length in the following sections. 
 
 ### Persistent Options
 
-#### Filtering your dataset
+#### Dataset selection
 
-Once you've selected a checkbox under "Filter samples by", options will appear beneath the "load new dataset" textbox in the bottom left of the screen. Checking a box in this list will remove all samples with that label from all analyses.
+The leftmost column is a series of radio buttons of parsed and read-to-analyze publicly-available datasets. You can only select one at a time, but loading between the sets will be quick to facilitate serialized analysis. When you select a dataset, some metadata including accession and citation will appear beneath the list of datasets. The options beneath "Filter samples by" (column 2) and "Sample tracks" (column 5) will update accordingly to the sample-level information from each dataset.
+
+#### Filtering your dataset 
+
+Once you've selected a checkbox under the heading "Filter samples by", options will appear beneath the "load new dataset" textbox in the bottom left of the screen. Checking a box in this list will remove all samples with that label from all analyses. This is important to do to ensure accruate analyses. For example, TCGA-PAAD has 182 samples, but only 150 are PDAC. The remainder have been identified to be non-PDAC tumors in previous publications. To filter to the correct 150, select "Decision", and then remove all variables except "whitelist". Your selection should look as it does in the image below:
+
+<img src="images/TCGA_filtering.png" width="40%"/>
 
 #### Picking your genes
 
@@ -36,17 +51,35 @@ To visualize gene expression, first select your gene sets of interest from the '
 
 ### Heatmapping and Clustering
 
-After picking your dataset and genes of interest, click the "Select" button to generate the heatmap. You will see that all non-selected genesets disappear, and a heatmap is generated consisting of selected genes. Genes that belong to a particular gene set will be indicated with a black bar to the left of the heatmap. Once you have generated the heatmap, you can deselect certain sets by unchecking the relevant check box. Doing so will remove genes that are unique to that set from the heatmap. This is helpful if you want to look at only the overlap of two gene sets. 
+After picking your dataset and genes of interest, click the "Select" button to generate the heatmap. You will see that all non-selected genesets disappear, and a heatmap is generated consisting of selected genes. Genes that belong to a particular gene set will be indicated with a black bar to the left of the heatmap. Once you have generated the heatmap, you can deselect certain sets by unchecking the relevant check box. Doing so will remove genes that are unique to that set from the heatmap. This is helpful if you want to look at only the overlap of two gene sets, without cluttering your visualization. 
+
+<img src="images/gene_and_track_selection.png" width="60%"/>
+
+#### Adding Sample Tracks
+
+You can add sample information to the top of the heatmap for improved visualization by using the "Sample Tracks" (column 5) select boxes. These tracks will also be used to generate either dot plots (categorical x continuous) or scatter plots (continuous x continuous) to the right of the heatmap comparing their values to the expression of your selected genesets. 
+
+When you're finished, click "Select" under "Gene sets to use" and your heatmap will be generated.
+
+![](images/Heatmap.png)
 
 ### Cartesian
 
-Here you will see two new options, "X Y Projection" and "How points should be colored". 
+Cartesian plotting primarily uses columns 4 and 5, in addition to two new selection options. At the top of the existing 5 columns, "X Y Projection" and "How points should be colored" will help you generate cartesian plots with ease. 
+
+<img src="images/Cartesian_selection.png" width="60%"/>
+
+To alter categorical coloration by sample info, use the "X-axis label -or- Color" dropbox at the top of column 5. Be careful picking something like "ID", as generating individual colors for each dot can slow down the interface. We recommend selecting this BEFORE navigating to the Cartesian tab.
 
 To generate a signature for coloration, use the "Expression Signature" dropdown menus on the right of the GUI. These will default to the user selected genes, but can be changed to any of our curated gene lists.
 
-To alter categorical coloration by sample info, use the "X-axis label -or- Color" dropbox in the same region. Be careful picking something like "ID", as generating individual colors for each dot can cause issues!
+<img src="images/tsne_with_dotplot.png"/>
 
 ### Survival
+
+The survival tab features two new options that appear at the top of the selection columns, "Method" and "Survival Factors".
+
+<img src="images/Survival_selection.png" width="60%"/>
 
 First, choose your method of analysis from the "Method" column on the left-most side of the GUI. Then, if your data has more than one survival metric, select which you will use from "Survival Factors."
 
@@ -54,11 +87,22 @@ To perform survival analysis, you will then use the right-most column labeled "S
 
 To see the impact a gene or geneset has on survival, select them in the "Expression signature" dropdown menus and select the corresponding checkbox under "Sample Tracks."
 
+At this time, the app can handle up to two sample tracks at once for survival analyses. In Kaplan-Meier analysis, a single plot will be generated with each combination of terms from both sample tracks. If you select Cox Regression, one plot will be made per sample track.
+
 ### Differential Expression (DE)
 
-To perform DE, you must pick 1 gene set and 1 "Sample Track". In the top right corner, radio buttons will appear so you may pick your comparison (multi-level comparisons will be provided in a future release). Our pre-provided data sets already select the appropriate method of DE analysis based on the mode of experimentation. You may select your own in "Experiment Type" before clicking the "Run Diff Expr" button. Dots colored red are members of the geneset you selected (multiple gene set coloration will be provided in a future release)
+To perform DE, you must pick 1 gene set and 1 "Sample Track". In the top right corner, radio buttons will appear so you may pick your comparison (multivariate comparisons will be provided in a future release). Our provided data sets already select the appropriate method of DE analysis based on the mode of experimentation. You may select your own in "Experiment Type" before clicking the "Run Diff Expr" button. The experiment types are described here:
+* scRNA: If you select "scRNA", a simple t-statistic will be generated between cohorts. This is only used in the interest of rapid point-and-click analysis, and we recommend validating the findings using more robust techniques.
+* RNAseq: This selection implements DESeq2 methodology on the subset of the data selected to generate an A vs B log fold change and -log10(padj) volcano plot
+* Array: This selection implements limma and extracts the logFC and padj columns to generate a similar volcano plot to DESeq2.
 
-## Loading New Data
+<img src="images/DE_selection.png" width="40%"/>
+
+Dots colored red are members of the geneset you selected (multiple gene set coloration will be provided in a future release). If members of your gene set are significantly differently expressed (regardless of log fold change), they will be labeled on the volcano plot as shown below.
+
+<img src="images/DE_output.png"/>
+
+## Loading New Data (LOCAL ONLY)
 
 In order to load data into the package, the data sets must be part of an installed package on the user's R instance. Under "Data sets to use" in the left-most column, you will see a text entry box labeled "Add private data". Below, we detail how to appropriately format your data files for ease of loading
 

@@ -1,7 +1,7 @@
 Package: pdacR
 Type: Package
 Title: Obtains and analyzes PDAC transcriptomics data
-Version: 0.1.1
+Version: 0.1.2
 Author: Richard Moffitt, Ryan Kawalerski, Luke A. Torre-Healy, Ki Oh
 Maintainer: <richard.moffitt@stonybrookmedicine.edu>
 Description: Downloads and prepares public PDAC data for analysis, and provides some basic tools for this analysis.
