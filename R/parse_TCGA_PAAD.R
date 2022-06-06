@@ -134,16 +134,38 @@ parse_TCGA_PAAD <- function() {
     as.numeric(as.character(sampInfo$Initial.Slide.Tumor.Cellularity))
 
   # to factor
-  sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX <-
-    as.factor(sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX)
-  sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM <-
-    as.factor(sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM)
-  sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical <-
-    as.factor(sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical)
+  # sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX <-
+  #   as.factor(sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX)
+  sampInfo$Bailey.Clusters = factor(sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX,
+                                    levels = c(1,2,3,4),
+                                    labels = c("Squamous","Immunogenic","Progenitor","ADEX"))
+  sampInfo$mRNA.Bailey.Clusters.All.150.Samples.1squamous.2immunogenic.3progenitor.4ADEX = NULL
+  # sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM <-
+  #   as.factor(sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM)
+  sampInfo$Collisson.Clusters = factor(sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM,
+                                    levels = c(1,2,3),
+                                    labels = c("Classical","Exocrine","QM"))
+  sampInfo$mRNA.Collisson.clusters.All.150.Samples.1classical.2exocrine.3QM <- NULL
+  # sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical <-
+  #   as.factor(sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical)
+  sampInfo$Moffitt.Clusters = factor(sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical,
+                                       levels = c(1,2),
+                                       labels = c("Basal-like","Classical"))
+  sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical <- NULL
+
+  sampInfo$Moffitt.HighPurity.Clusters = factor(sampInfo$mRNA.Moffitt.clusters.76.High.Purity.Samples.Only.1basal.2classical,
+                                     levels = c(1,2),
+                                     labels = c("Basal-like","Classical"))
+  sampInfo$mRNA.Moffitt.clusters.76.High.Purity.Samples.Only.1basal.2classical <- NULL
+
   sampInfo$RPPA.Clusters.All.150.Samples <-
     as.factor(sampInfo$RPPA.Clusters.All.150.Samples)
-  sampInfo$KRAS.Mutated.1.or.0 <-
-    as.factor(sampInfo$KRAS.Mutated.1.or.0)
+  # sampInfo$KRAS.Mutated.1.or.0 <-
+  #   as.factor(sampInfo$KRAS.Mutated.1.or.0)
+  sampInfo$KRAS.Mutation.Status <- factor(sampInfo$KRAS.Mutated.1.or.0,
+                                          levels = c(0,1),
+                                          labels = c("No Mutation","Mutated"))
+  sampInfo$KRAS.Mutated.1.or.0 <- NULL
   sampInfo$lncRNA.Clusters.All.150.Samples <-
     as.factor(sampInfo$lncRNA.Clusters.All.150.Samples)
   sampInfo$miRNA.Clusters.All.150.Samples <-
@@ -159,43 +181,43 @@ parse_TCGA_PAAD <- function() {
   ex <- apply(X=ex,MARGIN=2,FUN=as.numeric)
   dimnames(ex)[[2]] <- sampInfo$Tumor.Sample.ID
 
-  # Prepare dataset for consensus clustering for tumor and stroma subtyping
+  # Prepare dataset for consensus clustering for tumor and stroma subtyping - DEPRECATED
   # ================================================
-  sampInfo$tumor.classifier.training <- FALSE
-  sampInfo$stroma.classifier.training <- FALSE
-  sampInfo[["cluster.MT"]] <- as.character(NA)
-  sampInfo[["cluster.MS"]] <- as.character(NA)
-  sampInfo$cluster.MT <- c('basal','classical')[sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical]
-  sampleset <- which(sampInfo$Decision %in% "whitelist")
-  sampInfo$tumor.classifier.training[sampleset] <- TRUE
-  sampleset <- c(sampleset,which(sampInfo$Decision %in% "pseudonormal"))
-  sampInfo$stroma.classifier.training[sampleset] <- TRUE
-
-  ## =============================
-  # Make stroma cluster calls
-  ## =============================
-  featureset <- which(featInfo$SYMBOL %in%
-                        c(as.character(gene_lists$Moffitt.Activated.25),
-                          as.character(gene_lists$Moffitt.Normal.25)))
-  sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = t(scale(t(as.matrix(log2(1+ex[featureset,sampleset]))))),
-                                                           seed = 1234,
-                                                           pFeature = 0.8,
-                                                           pItem = 0.8,
-                                                           maxK = 6,
-                                                           reps=200,
-                                                           distance="pearson",
-                                                           clusterAlg="kmdist")[[2]]$consensusTree
-  tmp.cluster <- c("activated","normal")[cutree(tree = sampletree, k = 2)]
-  sampInfo$cluster.MS[sampleset] <- tmp.cluster
+  # sampInfo$tumor.classifier.training <- FALSE
+  # sampInfo$stroma.classifier.training <- FALSE
+  # sampInfo[["cluster.MT"]] <- as.character(NA)
+  # sampInfo[["cluster.MS"]] <- as.character(NA)
+  # sampInfo$cluster.MT <- c('basal','classical')[sampInfo$mRNA.Moffitt.clusters.All.150.Samples.1basal.2classical]
+  # sampleset <- which(sampInfo$Decision %in% "whitelist")
+  # sampInfo$tumor.classifier.training[sampleset] <- TRUE
+  # sampleset <- c(sampleset,which(sampInfo$Decision %in% "pseudonormal"))
+  # sampInfo$stroma.classifier.training[sampleset] <- TRUE
+  #
+  # ## =============================
+  # # Make stroma cluster calls
+  # ## =============================
+  # featureset <- which(featInfo$SYMBOL %in%
+  #                       c(as.character(gene_lists$Moffitt.Activated.25),
+  #                         as.character(gene_lists$Moffitt.Normal.25)))
+  # sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = t(scale(t(as.matrix(log2(1+ex[featureset,sampleset]))))),
+  #                                                          seed = 1234,
+  #                                                          pFeature = 0.8,
+  #                                                          pItem = 0.8,
+  #                                                          maxK = 6,
+  #                                                          reps=200,
+  #                                                          distance="pearson",
+  #                                                          clusterAlg="hc")[[2]]$consensusTree
+  # tmp.cluster <- c("activated","normal")[cutree(tree = sampletree, k = 2)]
+  # sampInfo$cluster.MS[sampleset] <- tmp.cluster
 
   # Convert cluster calls to factor
   # =====================================================================
-  sampInfo$cluster.MT <- as.factor(sampInfo$cluster.MT)
-  sampInfo$cluster.MS <- as.factor(sampInfo$cluster.MS)
-  sampInfo$MoffittTumor <- sampInfo$cluster.MT
-  sampInfo$MoffittStroma <- sampInfo$cluster.MS
-  sampInfo$cluster.MT <- NULL
-  sampInfo$cluster.MS <- NULL
+  # sampInfo$cluster.MT <- as.factor(sampInfo$cluster.MT)
+  # sampInfo$cluster.MS <- as.factor(sampInfo$cluster.MS)
+  # sampInfo$MoffittTumor <- sampInfo$cluster.MT
+  # sampInfo$MoffittStroma <- sampInfo$cluster.MS
+  # sampInfo$cluster.MT <- NULL
+  # sampInfo$cluster.MS <- NULL
 
   ## =============================
   # Wrangle survival data for shiny app
@@ -211,26 +233,36 @@ parse_TCGA_PAAD <- function() {
   ## =============================
   # Organize dataset
   ## =============================
+  sampInfo$Filter_by = sampInfo$Decision
+  sampInfo = sampInfo[,-which(colnames(sampInfo) == "Decision")]
+  sampInfo = sampInfo[,order(colnames(sampInfo))]
+
   TCGA_PAAD <- list()
   TCGA_PAAD$ex <- ex
   TCGA_PAAD$sampInfo <- sampInfo
   TCGA_PAAD$metadata <- list(log.transformed = FALSE,
-                             default.tracks = c('ABSOLUTE.Purity',
-                                                'Decision'),
                              reference = "Raphael BJ, et al, Cancer Cell, 2017, PMID:28810144",
                              accession = "DbGAaP: phs000178, BroadGDAC: PAAD",
                              description = "181 macrodissected primary tumors, 150 of which are whitelisted by histologic identification of neoplastic cellularity",
                              survivalA = "overall survival days",
                              survivalB = "None",
-                             exp.type = "RNAseq")
+                             exp.type = "RNAseq",
+                             default_selections = list(filter_column = "Filter_by",
+                                                       filter_levels = c("exclude","metastasis",
+                                                                         "normal","pseudonormal"),
+                                                       geneSets = c("Moffitt.Basal.25","Moffitt.Classical.25"),
+                                                       sampleTracks = c("ABSOLUTE Purity")))
 
   TCGA_PAAD$featInfo <- featInfo
+  TCGA_PAAD$sampInfo = TCGA_PAAD$sampInfo[,c(which(colnames(TCGA_PAAD$sampInfo) == "Tumor.Sample.ID"),
+                                             which(!(colnames(TCGA_PAAD$sampInfo) == "Tumor.Sample.ID")))]
+
 
   ## =============================
   # Save dataset
   ## =============================
-  save(list = c("TCGA_PAAD"),
-       file = "./data/TCGA_PAAD.RData",
+  saveRDS(TCGA_PAAD,
+       file = "./data/TCGA_PAAD.rds",
        compress = T)
   return(NULL)
 }

@@ -59,7 +59,10 @@ parse_Moffitt_supplement <- function() {
                    description = "15 primary tumor, 37 patient derived xenograft, 3 cell lines, 6 cancer associated fibroblast lines, RNAseq",
                    survivalA = "None",
                    survivalB = "None",
-                   exp.type = "RNAseq")
+                   exp.type = "RNAseq",
+                   default_selections = list(filter_column = "sample_type",
+                                             filter_levels = c("CAF"),
+                                             sampleTracks = c("sample_type")))
 
   ## =============================
   # Add gene species
@@ -75,46 +78,48 @@ parse_Moffitt_supplement <- function() {
   featInfo <- data.frame(SYMBOL = tmp[[1]],
                          species = tmp[[2]])
   ex  <- tmp[,c(-1,-2)]
-  print(dim(ex))
 
   ## =============================
   # Prepare dataset for classifier training
   ## =============================
-  sampInfo$tumor.classifier.training <- FALSE
-  sampInfo$stroma.classifier.training <- FALSE
-  sampInfo[["MoffittTumor"]] <- as.character(NA)
-  sampInfo[["MoffittStroma"]] <- as.character(NA)
-
-  # Call consensus subtypes for dataset
+  # sampInfo$tumor.classifier.training <- FALSE
+  # sampInfo$stroma.classifier.training <- FALSE
+  # sampInfo[["MoffittTumor"]] <- as.character(NA)
+  # sampInfo[["MoffittStroma"]] <- as.character(NA)
+  #
+  # # Call consensus subtypes for dataset
+  # #############
+  # # vvvvvvv
+  # sampleset <- which(sampInfo$sample_type %in% "PDX")
+  # featureset <- which(featInfo$SYMBOL %in%
+  #                       c(as.character(pdacR::gene_lists$Moffitt.Basal.25),
+  #                         as.character(pdacR::gene_lists$Moffitt.Classical.25)))
+  # # ^^^^^^^
+  # smallx <- t(scale(scale=FALSE,
+  #                   center=TRUE,
+  #                   x=t(log2(1+ex[featureset,sampleset]))))
+  # sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = smallx,
+  #                                                          seed = 1234,
+  #                                                          pFeature = 0.8,
+  #                                                          pItem = 0.8,
+  #                                                          maxK = 6,
+  #                                                          reps=200,
+  #                                                          distance="pearson",
+  #                                                          clusterAlg="kmdist")[[2]]$consensusTree
+  # tmp.cluster <- c("classical","basal")[cutree(tree = sampletree, k = 2)]
+  # sampInfo$MoffittTumor[sampleset] <- tmp.cluster
+  # ggplot(data = data.frame(classical = (colMeans(ex[featInfo$SYMBOL %in%
+  #                                                pdacR::gene_lists$Moffitt.Classical.25,sampleset])),
+  #                          basal = (colMeans(ex[featInfo$SYMBOL %in%
+  #                                                pdacR::gene_lists$Moffitt.Basal.25,sampleset])),
+  #                          MoffittTumor = sampInfo$MoffittTumor[sampleset]),
+  #        aes(x = basal,y = classical, color = MoffittTumor)) +
+  #   geom_point(size=2)
   #############
-  # vvvvvvv
-  sampleset <- which(sampInfo$sample_type %in% "PDX")
-  featureset <- which(featInfo$SYMBOL %in%
-                        c(as.character(pdacR::gene_lists$Moffitt.Basal.25),
-                          as.character(pdacR::gene_lists$Moffitt.Classical.25)))
-  # ^^^^^^^
-  smallx <- t(scale(scale=FALSE,
-                    center=TRUE,
-                    x=t(log2(1+ex[featureset,sampleset]))))
-  sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = smallx,
-                                                           seed = 1234,
-                                                           pFeature = 0.8,
-                                                           pItem = 0.8,
-                                                           maxK = 6,
-                                                           reps=200,
-                                                           distance="pearson",
-                                                           clusterAlg="kmdist")[[2]]$consensusTree
-  tmp.cluster <- c("classical","basal")[cutree(tree = sampletree, k = 2)]
-  sampInfo$MoffittTumor[sampleset] <- tmp.cluster
-  ggplot(data = data.frame(classical = (colMeans(ex[featInfo$SYMBOL %in%
-                                                 pdacR::gene_lists$Moffitt.Classical.25,sampleset])),
-                           basal = (colMeans(ex[featInfo$SYMBOL %in%
-                                                 pdacR::gene_lists$Moffitt.Basal.25,sampleset])),
-                           MoffittTumor = sampInfo$MoffittTumor[sampleset]),
-         aes(x = basal,y = classical, color = MoffittTumor)) +
-    geom_point(size=2)
-  #############
 
+  sampInfo = sampInfo[,order(colnames(sampInfo))]
+  sampInfo = sampInfo[,c(which(colnames(sampInfo) == "publicID"),
+                         which(colnames(sampInfo) != "publicID"))]
   ## =============================
   # Save dataset
   ## =============================
@@ -133,12 +138,15 @@ parse_Moffitt_supplement <- function() {
              metadata = metadata,
              featInfo = featInfo[which(featInfo$species == "Mm"),])
 
-  save(list = c("Moffitt_S2"),
-       file = "./data/Moffitt_S2.RData")
-  save(list = c("Moffitt_S2.Hs"),
-       file = "./data/Moffitt_S2.Hs.RData")
-  save(list = c("Moffitt_S2.Mm"),
-       file = "./data/Moffitt_S2.Mm.RData")
+  saveRDS(Moffitt_S2,
+       file = "./data/Moffitt_S2.rds",
+       compress = T)
+  saveRDS(Moffitt_S2.Hs,
+       file = "./data/Moffitt_S2.Hs.rds",
+       compress = T)
+  saveRDS(Moffitt_S2.Mm,
+       file = "./data/Moffitt_S2.Mm.rds",
+       compress = T)
 
   return(NULL)
 }

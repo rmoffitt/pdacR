@@ -20,7 +20,7 @@ pull_Seino_from_GEO <- function() {
   ## =============================
   gset <- getGEO(filename = system.file("extdata/Seino",
                                         "GSE107610_series_matrix.txt",
-                                        package = "pdac"),
+                                        package = "pdacR"),
                  GSEMatrix =TRUE,
                  AnnotGPL=TRUE,
                  getGPL=FALSE)
@@ -34,19 +34,15 @@ pull_Seino_from_GEO <- function() {
                           "disease state:ch1")]
   names(sampInfo)[names(sampInfo)=="title"] <- "submitted_sample_id"
 
- for (name in names(sampInfo)){
-   sampInfo[[name]] <- as.factor(sampInfo[[name]])
- }
-
-  print(summary(sampInfo))
+  for (name in names(sampInfo)){
+    sampInfo[[name]] <- as.factor(sampInfo[[name]])
+  }
 
   ## =============================
   # Read expression file
   ## =============================
   ex <- exprs(gset)
   ex <- as.data.frame(ex)
-
-  print(dim(ex))
 
   ## =============================
   # Organize feature info
@@ -56,7 +52,7 @@ pull_Seino_from_GEO <- function() {
 
   feature_file <- system.file("extdata/Seino",
                               "GSE107610_gene_annotations.xlsx",
-                              package = "pdac")
+                              package = "pdacR")
 
   feature_table <- read.xlsx(feature_file)
 
@@ -89,11 +85,11 @@ pull_Seino_from_GEO <- function() {
   ## =============================
   SYMBOL <- sapply(X = featInfo$SYMBOL,
                    FUN = function(x){
-                           y <- strsplit(x = x,
-                                         split = "///")
-                           y <- y[[1]][1]
-                           SYMBOL <- y
-                                     })
+                     y <- strsplit(x = x,
+                                   split = "///")
+                     y <- y[[1]][1]
+                     SYMBOL <- y
+                   })
   featInfo$SYMBOL <- unname(SYMBOL)
 
   entrez <- sapply(X = featInfo$ENTREZID,
@@ -117,10 +113,6 @@ pull_Seino_from_GEO <- function() {
   tmp <- featInfo[-1,]
   featInfo <- tmp
 
-  print(dim(ex))
-  print(dim(featInfo))
-  print(dim(sampInfo))
-
   ## =============================
   # Add metadata
   ## =============================
@@ -129,22 +121,24 @@ pull_Seino_from_GEO <- function() {
                    accession = "GEO: GSE107610",
                    description = "A library of 2 normal, 39 PDAC, 6 normal-like PDAC, and 10 engineered organoids",
                    survivalA = "None",
-                   survivalB = "None")
+                   survivalB = "None",
+                   default_selections = list(filter_column = "cancer_normal",
+                                             filter_levels = c("normal",    "normalLike", "sgRNA-treated")))
 
   ## =============================
   # Add sample information not in GEO
   ## =============================
   diff_meth_file <- system.file("extdata/Seino",
                                 "GSE107610_methylation.xlsx",
-                                package = "pdac")
+                                package = "pdacR")
 
   exp_cases_file <- system.file("extdata/Seino",
                                 "GSE107610_experiment_cases.xlsx",
-                                package = "pdac")
+                                package = "pdacR")
 
   wnt_subtypes_file <- system.file("extdata/Seino",
                                    "GSE107610_wnt_subtypes.xlsx",
-                                   package = "pdac")
+                                   package = "pdacR")
 
   diff_meth <- read.xlsx(diff_meth_file)
   exp_cases <- read.xlsx(exp_cases_file)
@@ -191,11 +185,11 @@ pull_Seino_from_GEO <- function() {
   # Organize dataset
   ## =============================
   Seino_GEO_array <- list(sampInfo = sampInfo,
-                         featInfo = featInfo,
-                         featInfo_meth = featInfo_methylation,
-                         ex = ex,
-                         diff_meth = diff_meth,
-                         metadata = metadata)
+                          featInfo = featInfo,
+                          featInfo_meth = featInfo_methylation,
+                          ex = ex,
+                          diff_meth = diff_meth,
+                          metadata = metadata)
 
   Seino_GEO_array$sampInfo <- Seino_GEO_array$sampInfo[, -which(names(Seino_GEO_array$sampInfo) %in% c("type",
                                                                                                        "extract_protocol_ch1",
@@ -205,7 +199,7 @@ pull_Seino_from_GEO <- function() {
                                        "geo_accession",
                                        "cancer.normal",
                                        "patient_number",
-                                       "epxression.array",
+                                       "expression.array",
                                        "whole.exome.seq",
                                        "meth.array",
                                        "NL.counterpart",
@@ -216,7 +210,6 @@ pull_Seino_from_GEO <- function() {
   ## =============================
   # Fix sample annotation for easy use in GUI
   ## =============================
-
   Seino_GEO_array$sampInfo$cancer.normal <- as.character(Seino_GEO_array$sampInfo$cancer.normal)
   engineered <- grep(Seino_GEO_array$sampInfo$submitted_sample_id,
                      pattern = "engineered")
@@ -236,77 +229,79 @@ pull_Seino_from_GEO <- function() {
   ## =============================
   # Consensus clustering to find tumor and stroma subtypes
   ## =============================
-
-  # Tumor
-  # ----------------------
-  dataset <- Seino_GEO_array
-
-    sampleset <- which(dataset$sampInfo$cancer.normal %in% "cancer")
-  tmp.k <- 2
-  tmp.ncusts <- 2
-
-  featureset <- which(dataset$featInfo$SYMBOL %in%
-                        c(as.character(pdac::gene_lists$Moffitt.Classical.25),
-                          as.character(pdac::gene_lists$Moffitt.Basal.25)))
-
-  smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
-
-  sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
-                                                           seed = 1234,
-                                                           pFeature = 0.8,
-                                                           pItem = 0.8,
-                                                           maxK = 6,
-                                                           reps=200,
-                                                           distance="pearson",
-                                                           clusterAlg="kmdist")[[tmp.k]]$consensusTree
-
-  tmp.cluster <- c("basal","classical")[cutree(tree = sampletree, k = 2)]
-  dataset$sampInfo$MoffittTumor <- NA
-  dataset$sampInfo$MoffittTumor[sampleset] <- tmp.cluster
-
-  ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
-                                  sampleTracks = c("MoffittTumor"),
-                                  colorlists = list(c("orange", "blue")),
-                                  drop.levels = TRUE)
-
-  RowSideColors <-  getSideColors(sampInfo = data.frame(basal =dataset$featInfo$SYMBOL[featureset] %in%
-                                                          pdac::gene_lists$Moffitt.Basal.25,
-                                                        classical =dataset$featInfo$SYMBOL[featureset] %in%
-                                                          pdac::gene_lists$Moffitt.Classical.25),
-                                  sampleTracks = c("basal",
-                                                   "classical"),
-                                  colorlists = list(c=c("white","orange"),
-                                                    b=c("white","blue")))
-  heatmap.3(x = smallx,
-            scale="row",
-            labRow = dataset$featInfo$SYMBOL[featureset],
-            col = colorRampPalette(c("blue", "white", "red"))(n = 299),
-            Colv = as.dendrogram(sampletree),
-            Rowv = TRUE,
-            distfun = function(x) as.dist((1-cor(t(x)))/2),
-            ColSideColors = ColSideColors$SideColors,
-            ColSideColorsSize = 6,
-            RowSideColorsSize = 6,
-            RowSideColors = t(RowSideColors$SideColors),
-            margins = c(5,20))
-  legend(xy.coords(x=.90,y=1),
-         legend=c(ColSideColors$text),
-         fill=c(ColSideColors$colors),
-         border=FALSE, bty="n",
-         y.intersp = 0.9, cex=0.5)
-
-  # Stroma
-  # ----------------------
-  dataset$sampInfo$MoffittStroma <- NA
+  #
+  #   # Tumor
+  #   # ----------------------
+  #   dataset <- Seino_GEO_array
+  #
+  #   sampleset <- which(dataset$sampInfo$cancer.normal %in% "cancer")
+  #   tmp.k <- 2
+  #   tmp.ncusts <- 2
+  #
+  #   featureset <- which(dataset$featInfo$SYMBOL %in%
+  #                         c(as.character(pdacR::gene_lists$Moffitt.Classical.25),
+  #                           as.character(pdacR::gene_lists$Moffitt.Basal.25)))
+  #
+  #   smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+  #
+  #   sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+  #                                                            seed = 1234,
+  #                                                            pFeature = 0.8,
+  #                                                            pItem = 0.8,
+  #                                                            maxK = 6,
+  #                                                            reps=200,
+  #                                                            distance="pearson",
+  #                                                            clusterAlg="hc")[[tmp.k]]$consensusTree
+  #
+  #   tmp.cluster <- c("basal","classical")[cutree(tree = sampletree, k = 2)]
+  #   dataset$sampInfo$MoffittTumor <- NA
+  #   dataset$sampInfo$MoffittTumor[sampleset] <- tmp.cluster
+  #
+  #   ColSideColors <-  pdacR::getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+  #                                          sampleTracks = c("MoffittTumor"),
+  #                                          colorlists = list(c("orange", "blue")),
+  #                                          drop.levels = TRUE)
+  #
+  #   RowSideColors <-  pdacR::getSideColors(sampInfo = data.frame(basal =dataset$featInfo$SYMBOL[featureset] %in%
+  #                                                                  pdacR::gene_lists$Moffitt.Basal.25,
+  #                                                                classical =dataset$featInfo$SYMBOL[featureset] %in%
+  #                                                                  pdacR::gene_lists$Moffitt.Classical.25),
+  #                                          sampleTracks = c("basal",
+  #                                                           "classical"),
+  #                                          colorlists = list(c=c("white","orange"),
+  #                                                            b=c("white","blue")))
+  #   pdacR::heatmap.3(x = smallx,
+  #                    scale="row",
+  #                    labRow = dataset$featInfo$SYMBOL[featureset],
+  #                    col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+  #                    Colv = as.dendrogram(sampletree),
+  #                    Rowv = TRUE,
+  #                    distfun = function(x) as.dist((1-cor(t(x)))/2),
+  #                    ColSideColors = ColSideColors$SideColors,
+  #                    ColSideColorsSize = 6,
+  #                    RowSideColorsSize = 6,
+  #                    RowSideColors = t(RowSideColors$SideColors),
+  #                    margins = c(5,20))
+  #   legend(xy.coords(x=.90,y=1),
+  #          legend=c(ColSideColors$text),
+  #          fill=c(ColSideColors$colors),
+  #          border=FALSE, bty="n",
+  #          y.intersp = 0.9, cex=0.5)
+  #
+  #   # Stroma
+  #   # ----------------------
+  #   dataset$sampInfo$MoffittStroma <- NA
 
   ## =============================
   # Save dataset
   ## =============================
 
-  Seino_GEO_array <- dataset
+  Seino_GEO_array$sampInfo = Seino_GEO_array$sampInfo[,order(colnames(Seino_GEO_array$sampInfo))]
+  Seino_GEO_array$sampInfo = Seino_GEO_array$sampInfo[,c(which(colnames(Seino_GEO_array$sampInfo)=="submitted_sample_id"),
+                                                         which(colnames(Seino_GEO_array$sampInfo)!="submitted_sample_id"))]
 
-
-  save(list = c("Seino_GEO_array"),
-       file = "./data/Seino_GEO_array.RData")
+  saveRDS(Seino_GEO_array,
+          file = "./data/Seino_GEO_array.rds",
+          compress = T)
   return(NULL)
 }

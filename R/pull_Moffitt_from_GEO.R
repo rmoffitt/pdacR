@@ -20,7 +20,7 @@ pull_Moffitt_from_GEO <- function() {
   ## =============================
   gset <- getGEO(filename = system.file("extdata/Moffitt_GEO",
                                         "GSE71729_series_matrix.txt.gz",
-                                        package = "pdac"),
+                                        package = "pdacR"),
                  GSEMatrix =TRUE,
                  AnnotGPL=FALSE,
                  getGPL=FALSE)
@@ -69,8 +69,8 @@ pull_Moffitt_from_GEO <- function() {
     }
   }
   sampInfo <- sampInfo[,-which(names(sampInfo) %in% c("characteristics_ch2","characteristics_ch2.1",
-                           "characteristics_ch2.2","characteristics_ch2.3",
-                           "characteristics_ch2.4","characteristics_ch2.5"))]
+                                                      "characteristics_ch2.2","characteristics_ch2.3",
+                                                      "characteristics_ch2.4","characteristics_ch2.5"))]
   sampInfo$specimen_type <- as.factor(sampInfo$specimen_type)
   sampInfo$location <- as.factor(sampInfo$location)
   sampInfo$moffittTumor <- as.factor(sampInfo$moffittTumor)
@@ -96,7 +96,9 @@ pull_Moffitt_from_GEO <- function() {
                    accession = "GEO: GSE71729",
                    description = "145 primary PDAC, 61 metastatic PDAC, 17 cell lines, 46 normal pancreas, 88 distant site normal tissue, microarray",
                    survivalA = "overall survival days",
-                   survivalB = "None")
+                   survivalB = "None",
+                   default_selections = list(filter_column = "specimen_type",
+                                             filter_levels = "Normal"))
 
 
   ## =============================
@@ -104,7 +106,7 @@ pull_Moffitt_from_GEO <- function() {
   ## =============================
   filename <- system.file("extdata/Moffitt_GEO",
                           "Moffitt_extended.xlsx",
-                          package = "pdac")
+                          package = "pdacR")
   extra.data <- data.frame(lapply(read.xlsx(filename),factor))
   sampInfo <- join(sampInfo,extra.data)
 
@@ -146,22 +148,17 @@ pull_Moffitt_from_GEO <- function() {
   sampInfo$survival_months <- NULL
   sampInfo$censor <- NULL
 
-  print(names(sampInfo))
+  sampInfo = sampInfo[,order(colnames(sampInfo))]
+  sampInfo = sampInfo[,c(which(colnames(sampInfo)=="submitted_sample_id"),
+                         which(colnames(sampInfo)!="submitted_sample_id"))]
 
-  ## =============================
-  # Set default parameters for app
-  ## =============================
-  default.tracks <- list(sample.tracks = c("specimen_type"),
-                         gene.sets = c("Moffitt.Basal.25","Moffitt.Classical.25"),
-                         filter.out.track = c("specimen_type"),
-                         filter.out.levels = c("Normal"))
 
   ## =============================
   # Save parsed dataset
   ## =============================
-  Moffitt_GEO_array <- list(sampInfo=sampInfo,featInfo=featInfo,ex=ex,metadata=metadata,default.tracks=default.tracks)
-  save(list = c("Moffitt_GEO_array"),
-       file = "./data/Moffitt_GEO_array.RData")
-
+  Moffitt_GEO_array <- list(sampInfo=sampInfo,featInfo=featInfo,ex=ex,metadata=metadata)
+  saveRDS(Moffitt_GEO_array,
+          file = "./data/Moffitt_GEO_array.rds",
+          compress=T)
   return(NULL)
 }

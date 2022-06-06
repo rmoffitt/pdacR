@@ -10,7 +10,9 @@
 #' @import SummarizedExperiment
 #' @import Seurat
 
-Convert_GUI_data <- function(object, from, to) {
+Convert_GUI_data <- function(object, from, to,
+                             pseudobulk = F,
+                             bulk_by = NULL) {
   # From SE to either GUI List or Seurat
   if(from %in% c('Summ','summ','Summarized','SummarizedExperiment')){
     if(class(object) != "SummarizedExperiment"){
@@ -60,17 +62,44 @@ Convert_GUI_data <- function(object, from, to) {
       warning("Object not a Seurat Object, check again")
     }
     else{
-      if(to %in% c('Summ','summ','Summarized','SummarizedExperiment')){
-        new_obj <- SummarizedExperiment(assays = Seurat::GetAssayData(object),
-                                        rowData = rownames(object),
-                                        colData = object@meta.data,
-                                        metadata = object@Misc)
-      }
-      if(to %in% c("GUI","gui","Moff","moff","moffitt","Moffitt","list")){
-        new_obj <- list(ex = as.matrix(Seurat::GetAssayData(object)),
-                        sampInfo = object@meta.data,
-                        featInfo = rownames(object),
-                        metadata = list(object@Misc))
+      if(pseudobulk == TRUE){
+        if(is.null(bulk_by)){
+          warning("Please provide a column name from object@meta.data to aggregate by")
+        }
+        if(to %in% c('Summ','summ','Summarized','SummarizedExperiment')){
+          new_obj <- SummarizedExperiment(assays = Seurat::AggregateExpression(object,
+                                                                               group.by = bulk_by,
+                                                                               slot = "counts")$RNA,
+                                          rowData = rownames(object),
+                                          colData = object@meta.data,
+                                          metadata = object@misc)
+        }
+        if(to %in% c("GUI","gui","Moff","moff","moffitt","Moffitt","list")){
+          new_obj <- list(ex = Seurat::AggregateExpression(object,
+                                                           group.by = bulk_by,
+                                                           slot = "counts")$RNA,
+                          sampInfo = object@meta.data[ # take the metadata
+                            !duplicated(object@meta.data[, #only first entry per thing to bulk by
+                                                   which(colnames(object@meta.data) == bulk_by)
+                                                   ])
+                            ,], # All columns of metadata
+                          featInfo = data.frame(SYMBOL = rownames(object)),
+                          metadata = list(object@misc))
+        }
+      } else{
+
+        if(to %in% c('Summ','summ','Summarized','SummarizedExperiment')){
+          new_obj <- SummarizedExperiment(assays = Seurat::GetAssayData(object),
+                                          rowData = rownames(object),
+                                          colData = object@meta.data,
+                                          metadata = object@misc)
+        }
+        if(to %in% c("GUI","gui","Moff","moff","moffitt","Moffitt","list")){
+          new_obj <- list(ex = as.matrix(Seurat::GetAssayData(object)),
+                          sampInfo = object@meta.data,
+                          featInfo = data.frame(SYMBOL = rownames(object)),
+                          metadata = list(object@misc))
+        }
       }
     }
   }

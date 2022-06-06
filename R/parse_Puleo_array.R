@@ -20,36 +20,36 @@ parse_Puleo_Array <- function() {
   ## =============================
 
   expression_file1 <- system.file("extdata/Puleo",
-                                 "ProcessedExpression1.txt",
-                                 package = "pdac")
+                                  "ProcessedExpression1.txt",
+                                  package = "pdacR")
 
   expression_file2 <- system.file("extdata/Puleo",
-                                 "ProcessedExpression2.txt",
-                                 package = "pdac")
+                                  "ProcessedExpression2.txt",
+                                  package = "pdacR")
 
   expression_file3 <- system.file("extdata/Puleo",
-                                 "ProcessedExpression3.txt",
-                                 package = "pdac")
+                                  "ProcessedExpression3.txt",
+                                  package = "pdacR")
 
   expression_file4 <- system.file("extdata/Puleo",
-                                 "ProcessedExpression4.txt",
-                                 package = "pdac")
+                                  "ProcessedExpression4.txt",
+                                  package = "pdacR")
 
   ex1 <- read.table(expression_file1,
-                   sep = "\t",
-                   header = TRUE)
+                    sep = "\t",
+                    header = TRUE)
 
   ex2 <- read.table(expression_file2,
-                   sep = "\t",
-                   header = TRUE)
+                    sep = "\t",
+                    header = TRUE)
 
   ex3 <- read.table(expression_file3,
-                   sep = "\t",
-                   header = TRUE)
+                    sep = "\t",
+                    header = TRUE)
 
   ex4 <- read.table(expression_file4,
-                   sep = "\t",
-                   header = TRUE)
+                    sep = "\t",
+                    header = TRUE)
 
   ex <- cbind(ex1,
               ex2,
@@ -94,7 +94,7 @@ parse_Puleo_Array <- function() {
 
   sample_file <- system.file("extdata/Puleo",
                              "E-MTAB-6134.sdrf.txt",
-                             package = "pdac")
+                             package = "pdacR")
 
 
   sample_info <- read.table(file = sample_file,
@@ -186,19 +186,19 @@ parse_Puleo_Array <- function() {
   sampInfo$OS.delay.months[which(sampInfo$OS.delay.months %in% "not available")] <- "NA"
 
   sampInfo$OS.censor.0yes.1no <- factor(sampInfo$OS.censor.0yes.1no,
-                                      levels = c("not available",
-                                                 "1",
-                                                 "0"),
-                                      labels = c("NA", "0", "1"))
+                                        levels = c("not available",
+                                                   "1",
+                                                   "0"),
+                                        labels = c("NA", "0", "1"))
 
   sampInfo$DFS.delay.months <- as.character(sampInfo$DFS.delay.months)
   sampInfo$DFS.delay.months[which(sampInfo$DFS.delay.months %in% "not available")] <- "NA"
 
   sampInfo$DFS.censor.0yes.1no <- factor(sampInfo$DFS.censor.0yes.1no,
-                                        levels = c("not available",
-                                                   "1",
-                                                   "0"),
-                                        labels = c("NA", "0", "1"))
+                                         levels = c("not available",
+                                                    "1",
+                                                    "0"),
+                                         labels = c("NA", "0", "1"))
 
   sampInfo$HighTumorCellClass <- as.character(sampInfo$HighTumorCellClass)
   sampInfo$HighTumorCellClass[which(sampInfo$HighTumorCellClass %in% "not available")] <- "NA"
@@ -229,9 +229,9 @@ parse_Puleo_Array <- function() {
 
   movetonumeric <- numeric()
   for(i in 1:ncol(sampInfo)){
-    if(i == which(names(sampInfo) %in% c("WholeTumorClass",
-                                         "HighTumorCellClass"))){
-     print(NULL)
+    tmp_name = colnames(sampInfo)[i]
+    if(tmp_name %in% c("WholeTumorClass","HighTumorCellClass")){
+      print(NULL)
     }
     else if(is.character(sampInfo[,i])){
       movetonumeric <- c(movetonumeric, i)
@@ -246,9 +246,9 @@ parse_Puleo_Array <- function() {
                            "Array.file",
                            "Clinical.center",
                            names(sampInfo)[((which(names(sampInfo) %in% "Sample.name")+1):
-                              (which(names(sampInfo) %in% "Clinical.center")-1))],
+                                              (which(names(sampInfo) %in% "Clinical.center")-1))],
                            names(sampInfo)[((which(names(sampInfo) %in% "Clinical.center")+1):
-                              (which(names(sampInfo) %in% "Array.file")-1))])]
+                                              (which(names(sampInfo) %in% "Array.file")-1))])]
 
   print(summary(sampInfo))
 
@@ -263,11 +263,11 @@ parse_Puleo_Array <- function() {
   sampInfo$censorB.0yes.1no <- sampInfo$DFS.censor.0yes.1no
 
   remove_cols <- which(names(sampInfo) %in% c("OS.delay.months",
-                                             "ostime",
-                                             "OS.censor.0yes.1no",
-                                             "DFS.delay.months",
-                                             "DFStime",
-                                             "DFS.censor.0yes.1no"))
+                                              "ostime",
+                                              "OS.censor.0yes.1no",
+                                              "DFS.delay.months",
+                                              "DFStime",
+                                              "DFS.censor.0yes.1no"))
 
   sampInfo <- sampInfo[,-remove_cols]
 
@@ -283,7 +283,8 @@ parse_Puleo_Array <- function() {
                    description = "309 primary PDAC FFPE block tumor samples processed by Affymetrix array",
                    survivalA = "overall survival days",
                    survivalB = "disease-free survival days",
-                   exp.type = "Array")
+                   exp.type = "Array",
+                   default_selections = list(sampleTracks = "Average.VAF"))
 
   ## =============================
   # Compile dataset and organize samples
@@ -303,125 +304,128 @@ parse_Puleo_Array <- function() {
 
   # Tumor
   # ----------------------
-  dataset <- Puleo_array
-  sampleset <- 1:nrow(dataset$sampInfo)
-  tmp.k <- 2
-  tmp.ncusts <- 2
+  # dataset <- Puleo_array
+  # sampleset <- 1:nrow(dataset$sampInfo)
+  # tmp.k <- 2
+  # tmp.ncusts <- 2
+  #
+  # featureset <- which(dataset$featInfo$SYMBOL %in%
+  #                       c(as.character(pdacR::gene_lists$Moffitt.Classical.25),
+  #                         as.character(pdacR::gene_lists$Moffitt.Basal.25)))
+  #
+  # smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+  #
+  # sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+  #                                                          seed = 1234,
+  #                                                          pFeature = 0.8,
+  #                                                          pItem = 0.8,
+  #                                                          maxK = 6,
+  #                                                          reps=200,
+  #                                                          distance="pearson",
+  #                                                          clusterAlg="hc")[[tmp.k]]$consensusTree
+  #
+  # tmp.cluster <- c("basal","classical")[cutree(tree = sampletree, k = 2)]
+  # dataset$sampInfo$MoffittTumor <- NA
+  # dataset$sampInfo$MoffittTumor[sampleset] <- tmp.cluster
+  #
+  # ColSideColors <-  pdacR::getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+  #                                 sampleTracks = c("MoffittTumor"),
+  #                                 colorlists = list(c("orange", "blue")),
+  #                                 drop.levels = TRUE)
+  #
+  # RowSideColors <-  pdacR::getSideColors(sampInfo = data.frame(basal =dataset$featInfo$SYMBOL[featureset] %in%
+  #                                                         pdacR::gene_lists$Moffitt.Basal.25,
+  #                                                       classical =dataset$featInfo$SYMBOL[featureset] %in%
+  #                                                         pdacR::gene_lists$Moffitt.Classical.25),
+  #                                 sampleTracks = c("basal",
+  #                                                  "classical"),
+  #                                 colorlists = list(c=c("white","orange"),
+  #                                                   b=c("white","blue")))
+  # pdacR::heatmap.3(x = smallx,
+  #           scale="row",
+  #           labRow = dataset$featInfo$SYMBOL[featureset],
+  #           col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+  #           Colv = as.dendrogram(sampletree),
+  #           Rowv = TRUE,
+  #           distfun = function(x) as.dist((1-cor(t(x)))/2),
+  #           ColSideColors = ColSideColors$SideColors,
+  #           ColSideColorsSize = 6,
+  #           RowSideColorsSize = 6,
+  #           RowSideColors = t(RowSideColors$SideColors),
+  #           margins = c(5,20))
+  # legend(xy.coords(x=.90,y=1),
+  #        legend=c(ColSideColors$text),
+  #        fill=c(ColSideColors$colors),
+  #        border=FALSE, bty="n",
+  #        y.intersp = 0.9, cex=0.5)
+  #
+  # # Stroma
+  # # ----------------------
+  # tmp.k <- 2
+  # tmp.ncusts <- 2
+  #
+  # featureset <- which(dataset$featInfo$SYMBOL %in%
+  #                       c(as.character(pdacR::gene_lists$Moffitt.Normal.25),
+  #                         as.character(pdacR::gene_lists$Moffitt.Activated.25)))
+  #
+  # smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
+  #
+  # sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
+  #                                                          seed = 1234,
+  #                                                          pFeature = 0.8,
+  #                                                          pItem = 0.8,
+  #                                                          maxK = 6,
+  #                                                          reps=200,
+  #                                                          distance="pearson",
+  #                                                          clusterAlg="hc")[[tmp.k]]$consensusTree
+  #
+  # tmp.cluster <- c("activated","normal")[cutree(tree = sampletree, k = 2)]
+  # dataset$sampInfo$MoffittStroma <- NA
+  # dataset$sampInfo$MoffittStroma[sampleset] <- tmp.cluster
+  #
+  # ColSideColors <-  pdacR::getSideColors(sampInfo = dataset$sampInfo[sampleset,],
+  #                                 sampleTracks = c("MoffittStroma"),
+  #                                 colorlists = list(c("brown", "lightblue")),
+  #                                 drop.levels = TRUE)
+  #
+  # RowSideColors <-  pdacR::getSideColors(sampInfo = data.frame(normal =dataset$featInfo$SYMBOL[featureset] %in%
+  #                                                         pdacR::gene_lists$Moffitt.Normal.25,
+  #                                                       activated =dataset$featInfo$SYMBOL[featureset] %in%
+  #                                                         pdacR::gene_lists$Moffitt.Activated.25),
+  #                                 sampleTracks = c("normal",
+  #                                                  "activated"),
+  #                                 colorlists = list(c=c("white","lightblue"),
+  #                                                   b=c("white","brown")))
+  # pdacR::heatmap.3(x = smallx,
+  #           scale="row",
+  #           labRow = dataset$featInfo$SYMBOL[featureset],
+  #           col = colorRampPalette(c("blue", "white", "red"))(n = 299),
+  #           Colv = as.dendrogram(sampletree),
+  #           Rowv = TRUE,
+  #           distfun = function(x) as.dist((1-cor(t(x)))/2),
+  #           ColSideColors = ColSideColors$SideColors,
+  #           ColSideColorsSize = 6,
+  #           RowSideColorsSize = 6,
+  #           RowSideColors = t(RowSideColors$SideColors),
+  #           margins = c(5,20))
+  # legend(xy.coords(x=.90,y=1),
+  #        legend=c(ColSideColors$text),
+  #        fill=c(ColSideColors$colors),
+  #        border=FALSE, bty="n",
+  #        y.intersp = 0.9, cex=0.5)
 
-  featureset <- which(dataset$featInfo$SYMBOL %in%
-                        c(as.character(pdac::gene_lists$Moffitt.Classical.25),
-                          as.character(pdac::gene_lists$Moffitt.Basal.25)))
 
-  smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
-
-  sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
-                                                           seed = 1234,
-                                                           pFeature = 0.8,
-                                                           pItem = 0.8,
-                                                           maxK = 6,
-                                                           reps=200,
-                                                           distance="pearson",
-                                                           clusterAlg="kmdist")[[tmp.k]]$consensusTree
-
-  tmp.cluster <- c("basal","classical")[cutree(tree = sampletree, k = 2)]
-  dataset$sampInfo$MoffittTumor <- NA
-  dataset$sampInfo$MoffittTumor[sampleset] <- tmp.cluster
-
-  ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
-                                  sampleTracks = c("MoffittTumor"),
-                                  colorlists = list(c("orange", "blue")),
-                                  drop.levels = TRUE)
-
-  RowSideColors <-  getSideColors(sampInfo = data.frame(basal =dataset$featInfo$SYMBOL[featureset] %in%
-                                                          pdac::gene_lists$Moffitt.Basal.25,
-                                                        classical =dataset$featInfo$SYMBOL[featureset] %in%
-                                                          pdac::gene_lists$Moffitt.Classical.25),
-                                  sampleTracks = c("basal",
-                                                   "classical"),
-                                  colorlists = list(c=c("white","orange"),
-                                                    b=c("white","blue")))
-  heatmap.3(x = smallx,
-            scale="row",
-            labRow = dataset$featInfo$SYMBOL[featureset],
-            col = colorRampPalette(c("blue", "white", "red"))(n = 299),
-            Colv = as.dendrogram(sampletree),
-            Rowv = TRUE,
-            distfun = function(x) as.dist((1-cor(t(x)))/2),
-            ColSideColors = ColSideColors$SideColors,
-            ColSideColorsSize = 6,
-            RowSideColorsSize = 6,
-            RowSideColors = t(RowSideColors$SideColors),
-            margins = c(5,20))
-  legend(xy.coords(x=.90,y=1),
-         legend=c(ColSideColors$text),
-         fill=c(ColSideColors$colors),
-         border=FALSE, bty="n",
-         y.intersp = 0.9, cex=0.5)
-
-  # Stroma
-  # ----------------------
-  tmp.k <- 2
-  tmp.ncusts <- 2
-
-  featureset <- which(dataset$featInfo$SYMBOL %in%
-                        c(as.character(pdac::gene_lists$Moffitt.Normal.25),
-                          as.character(pdac::gene_lists$Moffitt.Activated.25)))
-
-  smallx <- t(scale(t(dataset$ex[featureset,sampleset])))
-
-  sampletree <- ConsensusClusterPlus::ConsensusClusterPlus(d = as.matrix(smallx),
-                                                           seed = 1234,
-                                                           pFeature = 0.8,
-                                                           pItem = 0.8,
-                                                           maxK = 6,
-                                                           reps=200,
-                                                           distance="euclidean",
-                                                           clusterAlg="kmdist")[[tmp.k]]$consensusTree
-
-  tmp.cluster <- c("activated","normal")[cutree(tree = sampletree, k = 2)]
-  dataset$sampInfo$MoffittStroma <- NA
-  dataset$sampInfo$MoffittStroma[sampleset] <- tmp.cluster
-
-  ColSideColors <-  getSideColors(sampInfo = dataset$sampInfo[sampleset,],
-                                  sampleTracks = c("MoffittStroma"),
-                                  colorlists = list(c("brown", "lightblue")),
-                                  drop.levels = TRUE)
-
-  RowSideColors <-  getSideColors(sampInfo = data.frame(normal =dataset$featInfo$SYMBOL[featureset] %in%
-                                                          pdac::gene_lists$Moffitt.Normal.25,
-                                                        activated =dataset$featInfo$SYMBOL[featureset] %in%
-                                                          pdac::gene_lists$Moffitt.Activated.25),
-                                  sampleTracks = c("normal",
-                                                   "activated"),
-                                  colorlists = list(c=c("white","lightblue"),
-                                                    b=c("white","brown")))
-  heatmap.3(x = smallx,
-            scale="row",
-            labRow = dataset$featInfo$SYMBOL[featureset],
-            col = colorRampPalette(c("blue", "white", "red"))(n = 299),
-            Colv = as.dendrogram(sampletree),
-            Rowv = TRUE,
-            distfun = function(x) as.dist((1-cor(t(x)))/2),
-            ColSideColors = ColSideColors$SideColors,
-            ColSideColorsSize = 6,
-            RowSideColorsSize = 6,
-            RowSideColors = t(RowSideColors$SideColors),
-            margins = c(5,20))
-  legend(xy.coords(x=.90,y=1),
-         legend=c(ColSideColors$text),
-         fill=c(ColSideColors$colors),
-         border=FALSE, bty="n",
-         y.intersp = 0.9, cex=0.5)
-
-  Puleo_array <- dataset
+  Puleo_array$sampInfo = Puleo_array$sampInfo[,order(colnames(Puleo_array$sampInfo))]
+  Puleo_array$sampInfo = Puleo_array$sampInfo[,c(which(colnames(Puleo_array$sampInfo)=="Sample.name"),
+                                                 which(colnames(Puleo_array$sampInfo)!="Sample.name"))]
 
   ## =============================
   # Save dataset
   ## =============================
-  save(list = c("Puleo_array"),
-       file = "./data/Puleo_array.RData",
-       compress = T)
-
+  ## Version for local instance of app
+  saveRDS(Puleo_array,
+          file = "./data/Puleo_array.rds",
+          compress = T)
   return(NULL)
 }
 

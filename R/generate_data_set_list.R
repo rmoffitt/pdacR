@@ -14,6 +14,7 @@ generate_data_set_list <- function() {
     "Moffitt seq, 2015",
     "Olive seq, 2019",
     "Puleo array, 2018",
+    "scAtlas Pseudobulked",
     "Seino array, 2018",
     "TCGA PAAD, 2017"),
     variablenames =c("Chen_GEO_array",
@@ -26,27 +27,28 @@ generate_data_set_list <- function() {
                      "Moffitt_S2.Hs",
                      "Olive_2019",
                      "Puleo_array",
+                     "scAtlas.pseudobulked",
                      "Seino_GEO_array",
                      "TCGA_PAAD"))
 
   save(list = c("data_set_list"),
        file = "./data/data_set_list.RData")
 
-  for(i in data_set_list$variablenames){
-    writeLines('----------------------------')
-    writeLines(i)
-    dataset <- get(as.character(i))
-    thesecols <- grep(names(dataset$sampInfo),pattern = "cluster.MT|tumor.classifier")
-    print(summary(dataset$sampInfo[,thesecols]))
-    if("MoffittTumor" %in% names(dataset$sampInfo)){
-      thesecols <- grep(names(dataset$sampInfo),pattern = "MoffittTumor")
-      print(table(dataset$sampInfo[,thesecols]))
-    }
-    else{
-      thesecols <- grep(names(dataset$sampInfo),pattern = "cluster.MT")
-      print(table(dataset$sampInfo[,thesecols]))}
-    thesecols <- grep(names(dataset$sampInfo),pattern = "tumor.classifier")
-    print(summary(dataset$sampInfo[,thesecols]))
-  }
+  # for(i in data_set_list$variablenames){
+  #   writeLines('----------------------------')
+  #   writeLines(i)
+  #   dataset <- get(as.character(i))
+  #   thesecols <- grep(names(dataset$sampInfo),pattern = "cluster.MT|tumor.classifier")
+  #   print(summary(dataset$sampInfo[,thesecols]))
+  #   if("MoffittTumor" %in% names(dataset$sampInfo)){
+  #     thesecols <- grep(names(dataset$sampInfo),pattern = "MoffittTumor")
+  #     print(table(dataset$sampInfo[,thesecols]))
+  #   }
+  #   else{
+  #     thesecols <- grep(names(dataset$sampInfo),pattern = "cluster.MT")
+  #     print(table(dataset$sampInfo[,thesecols]))}
+  #   thesecols <- grep(names(dataset$sampInfo),pattern = "tumor.classifier")
+  #   print(summary(dataset$sampInfo[,thesecols]))
+  # }
   return(NULL)
 }
