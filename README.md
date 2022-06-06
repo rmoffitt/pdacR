@@ -120,9 +120,9 @@ For examples, please refer to some of the included sample .RData objects in `dat
 ### Package Formatting
 
 Private data packages _**must have been built and installed**_ to their local instance before being uploaded to the GUI. **Loading a package will append all private data sets and private gene lists to selectable menus.** To do so, PackageName/data/ must contain _at least one_ of the following objects:
-* data_set_list.RData: a _data.frame_ with columns _labels_ (how the data will appear) and _variablenames_ (the name of the saved .RData object as it would be loaded in memory). Each .RData object should match the format detailed above
+* data_set_list.RData: a _data.frame_ with columns _labels_ (how the data will appear) and _variablenames_ (the name of the saved .rds object as it would be loaded in memory). Each .rds object should match the format detailed above
 * gene_set_list.RData: A _list_ of character vectors. The name of each entry in the list will be appended to our select gene sets column. **Note: These currently only integrate well as gene SYMBOL, if you use Entrez or ensembl IDs, they will not be comparable across our public data sets or in conjunction with our gene sets**
-* Any .RData you'd like to load in, using the above _list_ format
+* Any .rds you'd like to load in, using the above _list_ format
 
 ## Contributions
 
@@ -137,6 +137,8 @@ More information on pdacR and its Shiny app can be found here:
 ```
 
 Analyses relevant to the paper are located in `inst/analysis`
+
+For gene set information, please see `R/parse_gene_lists.R`. This script has the relevant citations and the locations of the relevant raw files within `inst/extdata`. 
 
 ## License
 
