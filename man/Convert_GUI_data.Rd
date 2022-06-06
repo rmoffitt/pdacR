@@ -4,7 +4,7 @@
 \alias{Convert_GUI_data}
 \title{Fully flexible conversion of .RData}
 \usage{
-Convert_GUI_data(object, from, to)
+Convert_GUI_data(object, from, to, pseudobulk = F, bulk_by = NULL)
 }
 \arguments{
 \item{object}{An object of either class 'list','SummarizedExperiment', or 'Seurat'}

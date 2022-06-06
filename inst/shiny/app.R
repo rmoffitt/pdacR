@@ -33,18 +33,18 @@ ui <- fluidPage(shinyjs::useShinyjs(),
                                                               fluidRow(uiOutput("ReactiveBarplotcolor")))
                                               ),
                                               fluidRow(column(8,plotOutput(outputId="heatmap",
-                                                                           height = "800px")),
+                                                                           height = "700px")),
                                                        column(4,plotOutput(outputId = "barplot",
-                                                                           height = "800px")))
+                                                                           height = "700px")))
                                      ),
                                      tabPanel(title = "Cartesian",
                                               fluidRow(column(2, offset = 9,
                                                               fluidRow(uiOutput("ReactiveBarplotcolor2")))
                                               ),
                                               fluidRow(fluidRow(column(9, plotOutput(outputId="cartesian",
-                                                                                     height = "800px")),
+                                                                                     height = "700px")),
                                                                 column(3, plotOutput(outputId = "barplot2",
-                                                                                     height = "800px"))),
+                                                                                     height = "700px"))),
                                                        fluidRow(column(3),
                                                                 column(2,radioButtons(inputId = "projection",
                                                                                       label = "X Y Projection",
@@ -60,7 +60,7 @@ ui <- fluidPage(shinyjs::useShinyjs(),
                                      ),
                                      tabPanel(title = "Survival",
                                               fluidRow(column(10,plotOutput(outputId = "survival",
-                                                                            height = "800px")),
+                                                                            height = "700px")),
                                                        column(2,
                                                               fluidRow(uiOutput("ReactiveContinuousSurv.1")),
                                                               fluidRow(uiOutput("ReactiveContinuousSurv.2")))),
@@ -74,7 +74,7 @@ ui <- fluidPage(shinyjs::useShinyjs(),
                                      ),
                                      tabPanel(title = "Diff Expr",
                                               fluidRow(column(9,plotOutput(outputId = "volcano",
-                                                                           height = "800px")),
+                                                                           height = "700px")),
                                                        column(1,
                                                               fluidRow(uiOutput("DESeqcontrastA"))),
                                                        column(1,
@@ -93,46 +93,49 @@ ui <- fluidPage(shinyjs::useShinyjs(),
                 #           column(2,downloadLink(label = "save data as table", outputId = 'tablelink') )),
                 #----------------------------------------
                 fluidRow(
-                  column(4,
-                         fluidRow(radioButtons(inputId = "Species",
-                                               label = "Select Species",
-                                               choices = c("Human", "Mouse"),
-                                               selected = "Human")),
-                         fluidRow(
-                           column(6,
-                                  uiOutput("ReactiveDatasets"),
-                                  htmlOutput(outputId = "ReactiveCitation"),
-                                  textInput(inputId = "addPackageText",
-                                            label = "Add private data sets",
-                                            value = "",
-                                            placeholder="Name of data"),
+                  column(3,
+                         radioButtons(inputId = "Species",
+                                      label = "Select Species",
+                                      choices = c("Human", "Mouse"),
+                                      selected = "Human"),
+                         uiOutput("ReactiveDatasets"),
+                         htmlOutput(outputId = "ReactiveCitation"),
+                         textInput(inputId = "addPackageText",
+                                   label = "Add private data sets",
+                                   value = "",
+                                   placeholder="Name of data"),
 
-                                  textOutput("text"),
+                         textOutput("text"),
 
-                                  actionButton(inputId = "addPackageButton",
-                                               label="load"),
-                                  uiOutput("ReactiveSampleFilterSpecifics")
-                           ) ,
-                           column(6,
-                                  uiOutput("ReactiveSampleFilters")
-                           )
-                         )
+                         actionButton(inputId = "addPackageButton",
+                                      label="load"),
+                         uiOutput("ReactiveSampleFilterSpecifics")
                   ),
                   column(2,
-                         fluidRow(checkboxGroupInput(inputId = "remove.zeros",
-                                                     label = "Invariant genes",
-                                                     choices = c("hide"),
-                                                     selected = c("hide"))),
-                         fluidRow(htmlOutput(outputId = "GeneTitle")),
+                         radioButtons(inputId = "Defaults",
+                                      label = "Use suggested filters",
+                                      choices = c("Yes", "No"),
+                                      selected = "Yes"),
+                         uiOutput("ReactiveSampleFilters")
+                  ),
+                  column(2,
                          fluidRow(uiOutput("SelectionButton"),
                                   uiOutput("ClearButton")),
+                         fluidRow(htmlOutput(outputId = "GeneTitle")),
                          fluidRow(uiOutput("ReactiveGenesets"))
                   ),
                   column(2,
-                         fluidRow(radioButtons(inputId = "scaling",
-                                               label = "Scale Colors",
-                                               choices = c("Row","None"),
-                                               selected = "Row") ),
+                         fluidRow(
+                           column(2,radioButtons(inputId = "scaling",
+                                                 label = "Scale Colors",
+                                                 choices = c("Row","None"),
+                                                 selected = "Row")
+                           ),
+                           column(1,offset = 2,  checkboxGroupInput(inputId = "remove.zeros",
+                                                                    label = "Invariant genes",
+                                                                    choices = c("hide"),
+                                                                    selected = c("hide"))),
+                         ),
                          fluidRow(radioButtons(inputId = "sampleClustertype",
                                                label = "Sample Method",
                                                choices = c("Consensus","Consensus.RowScaled","Euclidean","Pearson","K.Means","Sorted"),
@@ -151,16 +154,13 @@ ui <- fluidPage(shinyjs::useShinyjs(),
                                             value = "PDCD1") ),
                          fluidRow(textInput(inputId = "userGeneList.3",
                                             label = "User selected genes 3",
-                                            value = "CD274") )
-
-                  ),
+                                            value = "CD274") )),
                   column(2, fluidRow(uiOutput("ReactiveXaxisLabel")),
                          fluidRow(uiOutput("ReactiveSignatureTrack.1")),
                          fluidRow(uiOutput("ReactiveSignatureTrack.2")),
                          fluidRow(uiOutput("ReactiveSignatureTrack.3")),
                          fluidRow(uiOutput("ReactiveSampleTracks")))
-                )
-)
+                ))
 
 server <- function(input, output) {
 
@@ -171,7 +171,8 @@ server <- function(input, output) {
   output$ReactiveDatasets <- renderUI({
     radioButtons(inputId = "dataset",
                  label = "Data sets to use",
-                 choices = globals$data_set_list$labels)
+                 choices = globals$data_set_list$labels,
+                 selected = "TCGA PAAD, 2017")
   })
   # ==========================================================
   # What is the source citation for the dataset currently being used?
@@ -219,7 +220,7 @@ server <- function(input, output) {
 
 
   output$SelectionButton <- renderUI({
-    actionButton("GeneSelection", "Select")
+    actionButton("GeneSelection", "Generate Heatmap")
   })
 
   observe({
@@ -236,17 +237,38 @@ server <- function(input, output) {
 
 
   output$ReactiveGenesets <- renderUI({
-    checkboxGroupInput(inputId = "genesets",
-                       label = "",
-                       choices = c("Most Variable 100",
-                                   "Most Variable 1000",
-                                   "User selected genes 1",
-                                   "User selected genes 2",
-                                   "User selected genes 3",
-                                   gsub(pattern = ".",
-                                        replacement = " ",
-                                        fixed = TRUE,
-                                        x = names(globals$gene_lists))))
+    meta = dataSet()$meta
+    if(exists("geneSets", where = meta$default_selections)){
+      checkboxGroupInput(inputId = "genesets",
+                         label = "",
+                         choices = c("Most Variable 100",
+                                     "Most Variable 1000",
+                                     "User selected genes 1",
+                                     "User selected genes 2",
+                                     "User selected genes 3",
+                                     gsub(pattern = ".",
+                                          replacement = " ",
+                                          fixed = TRUE,
+                                          x = names(globals$gene_lists))),
+                         selected = gsub(pattern = ".",
+                                         replacement = " ",
+                                         fixed = TRUE,
+                                         x = meta$default_selections$geneSets))
+      # shinyjs::runjs("Shiny.setInputValue(genesets.2, input$genesets);")
+      # r$heatmapStoplight = "green"
+    } else {
+      checkboxGroupInput(inputId = "genesets",
+                         label = "",
+                         choices = c("Most Variable 100",
+                                     "Most Variable 1000",
+                                     "User selected genes 1",
+                                     "User selected genes 2",
+                                     "User selected genes 3",
+                                     gsub(pattern = ".",
+                                          replacement = " ",
+                                          fixed = TRUE,
+                                          x = names(globals$gene_lists))))
+    }
   })
 
   observeEvent(input$bigTab, {
@@ -295,11 +317,10 @@ server <- function(input, output) {
   observeEvent(input$GeneSelection, {
     output$ReactiveGenesets <- renderUI({
       checkboxGroupInput(inputId = "genesets.2",
-                         label = "Select genesets to plot",
+                         label = "Select genesets to retain",
                          choices = c(input$genesets),
                          selected = c(input$genesets))
     })
-
     r$heatmapStoplight = "green"
   })
 
@@ -316,7 +337,8 @@ server <- function(input, output) {
                                      gsub(pattern = ".",
                                           replacement = " ",
                                           fixed = TRUE,
-                                          x = names(globals$gene_lists))))
+                                          x = names(globals$gene_lists))),
+                         selected = input$genesets)
     })
     r$heatmapStoplight = "red"
     output$heatmap <- NULL
@@ -408,22 +430,51 @@ server <- function(input, output) {
                    choices = "This factor is not continuous")
     }
   })
+  # ==========================================================
+  # Which sample filter categories should be available
+  output$ReactiveSampleFilters <- renderUI({
+    meta <- dataSet()$metadata
+    possibleTracks <- gsub(pattern = ".", replacement = " ",fixed = TRUE, x = names(dataSet()$sampInfo))
+    if(exists("default_selections", where = meta) && input$Defaults == "Yes"){
+      checkboxGroupInput(inputId = "sampleFilters",
+                         label = "Filter samples by",
+                         choices = possibleTracks,
+                         selected = meta$default_selections$filter_column)
+    } else {
+      checkboxGroupInput(inputId = "sampleFilters",
+                         label = "Filter samples by",
+                         choices = possibleTracks)
+    }
+  })
 
   # ==========================================================
   # Which sample sub-categories are actually used?
   output$ReactiveSampleFilterSpecifics <- renderUI({
     sampInfo <- dataSet()$sampInfo
+    meta <- dataSet()$metadata
     possibleTracks <- NULL
     for(i in gsub(pattern = " ", replacement = ".",fixed = TRUE, x = input$sampleFilters)){
-      if(length(levels(sampInfo[,names(sampInfo)==i]))>1){
-        possibleTracks <- c(possibleTracks,paste(i,levels(sampInfo[,names(sampInfo)==i]), sep=":"))
+      if(length(levels(as.factor(sampInfo[,names(sampInfo)==i])))>1){
+        possibleTracks <- c(possibleTracks,paste(i,levels(as.factor(sampInfo[,names(sampInfo)==i])), sep=":"))
       }
     }
 
     if(!is.null(input$sampleFilters) & class(sampInfo[,names(sampInfo)==i]) != "numeric"){
-      checkboxGroupInput(inputId = "sampleFilterSpecifics",
-                         label = "Select to Remove",
-                         choices = possibleTracks)
+      if(exists("default_selections", where = meta) && input$Defaults == "Yes"){
+        # print("Filter by the following")
+        # print(meta$default_selections$filter_levels)
+        checkboxGroupInput(inputId = "sampleFilterSpecifics",
+                           label = "Select to Remove",
+                           choices = possibleTracks,
+                           selected = paste0(meta$default_selections$filter_column, ":",
+                                             meta$default_selections$filter_levels))
+      } else {
+        # print("Filter options are")
+        # print(possibleTracks)
+        checkboxGroupInput(inputId = "sampleFilterSpecifics",
+                           label = "Select to Remove",
+                           choices = possibleTracks)
+      }
     }
     else if(class(sampInfo[,names(sampInfo)==i]) == "numeric"){
       radioButtons(inputId = "placeholder3",
@@ -433,33 +484,48 @@ server <- function(input, output) {
   })
 
   # ==========================================================
-  # Which sample filter categories should be available
-  output$ReactiveSampleFilters <- renderUI({
-    possibleTracks <- gsub(pattern = ".", replacement = " ",fixed = TRUE, x = names(dataSet()$sampInfo))
-    checkboxGroupInput(inputId = "sampleFilters",
-                       label = "Filter samples by",
-                       choices = possibleTracks)
-  })
-
-  # ==========================================================
   # Which sample tracks should be selectable for visualization
   output$ReactiveSampleTracks <- renderUI({
+    meta = dataSet()$metadata
     possibleTracks <- names(dataSet()$sampInfo)
-    checkboxGroupInput(inputId = "sampleTracks",
-                       label = "Sample Tracks",
-                       choices =  gsub(pattern = ".",
-                                       replacement = " ",
-                                       fixed = TRUE,
-                                       x =
-                                         c("Expression.signature.1",
-                                           "Expression.signature.2",
-                                           "Expression.signature.3",
-                                           as.character(globals$classifier_list$labels),
-                                           "molgrad_PDX",
-                                           "molgrad_Puleo",
-                                           "molgrad_ICGCarray",
-                                           "molgrad_ICGCrnaseq",
-                                           possibleTracks)))
+    if(exists("sampleTracks", where = meta$default_selections)){
+      print((paste0("Default tracks: ", meta$default_selections$sampleTracks)))
+      checkboxGroupInput(inputId = "sampleTracks",
+                         label = "Sample Tracks",
+                         choices =  gsub(pattern = ".",
+                                         replacement = " ",
+                                         fixed = TRUE,
+                                         x =
+                                           c("Expression.signature.1",
+                                             "Expression.signature.2",
+                                             "Expression.signature.3",
+                                             as.character(globals$classifier_list$labels),
+                                             "molgrad_PDX",
+                                             "molgrad_Puleo",
+                                             "molgrad_ICGCarray",
+                                             "molgrad_ICGCrnaseq",
+                                             possibleTracks)),
+                         selected = gsub(pattern = ".",
+                                         replacement = " ",
+                                         fixed = TRUE,
+                                         x =meta$default_selections$sampleTracks))
+    } else {
+      checkboxGroupInput(inputId = "sampleTracks",
+                         label = "Sample Tracks",
+                         choices =  gsub(pattern = ".",
+                                         replacement = " ",
+                                         fixed = TRUE,
+                                         x =
+                                           c("Expression.signature.1",
+                                             "Expression.signature.2",
+                                             "Expression.signature.3",
+                                             as.character(globals$classifier_list$labels),
+                                             "molgrad_PDX",
+                                             "molgrad_Puleo",
+                                             "molgrad_ICGCarray",
+                                             "molgrad_ICGCrnaseq",
+                                             possibleTracks)))
+    }
   })
   getSampleTracks = reactive({
     pretty.selection <- input$sampleTracks
@@ -629,6 +695,8 @@ server <- function(input, output) {
   # ================================================================
   # ------------- Reactive Values -------------------------------
   # ================================================================
+  ## Dataset location
+  dataLocation = system.file("data",package = "pdacR")
 
   globals <- reactiveValues(data_set_list = pdacR::data_set_list,
                             gene_lists = pdacR::gene_lists,
@@ -747,8 +815,8 @@ server <- function(input, output) {
 
     if(input$exp.type == "scRNA"){
       # quick and dirty b/c its exploratory
-      change <- cbind(numerator = rowMeans(cts[,which(coldata$use == input$contrastA)]),
-                      denominator = rowMeans(cts[,which(coldata$use == input$contrastB)]))
+      change <- cbind(numerator = rowMeans(cts[,which(coldata$use == input$contrastA)],na.rm=T),
+                      denominator = rowMeans(cts[,which(coldata$use == input$contrastB)],na.rm=T))
 
       test.res <- numeric(length = nrow(cts))
       for(i in 1:nrow(cts)){
@@ -883,8 +951,10 @@ server <- function(input, output) {
     )
     x <- NULL
     for(selectedset in input$dataset){
+      print(dataLocation)
       selectedvariable <- globals$data_set_list$variablenames[globals$data_set_list$labels %in% selectedset]
-      y <- get(as.character(selectedvariable))
+      filename = paste0(dataLocation,"/",selectedvariable,".rds")
+      y = readRDS(file = filename)
       y$sampInfo$source <- selectedset
       do.a.log.transform = TRUE # the default behavior
 
@@ -948,19 +1018,19 @@ server <- function(input, output) {
         names(g)[length(g)] <- this_gene_list
       } else{
         # just a list of gene symbols
-        print(this_gene_list)
-        print(gene_list_obj)
+        # print(this_gene_list)
+        # print(gene_list_obj)
         Fs <- which(x$featInfo$SYMBOL %in% gene_list_obj)
-        print(Fs)
+        #print(Fs)
         f <- c(f,Fs)
-        print(f)
-        print("------------")
+        #print(f)
+        #print("------------")
         g$new <- ""
         g[Fs,length(g)] <- this_gene_list
         g$new <- as.factor(g$new)
         names(g)[length(g)] <- this_gene_list
-        print(head(g, n = 10))
-        levels(g$new)
+        #print(head(g, n = 10))
+        #levels(g$new)
       }
 
     }
@@ -1039,10 +1109,10 @@ server <- function(input, output) {
         }
         return(x)})
     )
-    print(class(combined$featInfo))
-    print(names(combined$featInfo))
-    print(dim(combined$featInfo))
-    print("Done merging.")
+    # print(class(combined$featInfo))
+    # print(names(combined$featInfo))
+    # print(dim(combined$featInfo))
+    # print("Done merging.")
     return(combined)
   }
 
@@ -1179,7 +1249,7 @@ server <- function(input, output) {
                                                      maxK = k+1,
                                                      reps=50,
                                                      distance="pearson",
-                                                     clusterAlg="km")[[k]]$consensusTree)
+                                                     clusterAlg="pam")[[k]]$consensusTree)
       } else if ("Consensus" %in% input$sampleClustertype){
         k <- input$sampleSortBy
         Colv <- as.dendrogram(
@@ -1188,7 +1258,7 @@ server <- function(input, output) {
                                                      maxK = k+1,
                                                      reps = 50,
                                                      distance = "pearson",
-                                                     clusterAlg = "km")[[k]]$consensusTree)
+                                                     clusterAlg = "pam")[[k]]$consensusTree)
       } else if("Pearson" %in% input$sampleClustertype){
         Colv <- as.dendrogram( hclust( bioDist::cor.dist(x = t(as.matrix(x$ex)) ) ) )
       } else if("Euclidean" %in% input$sampleClustertype){
@@ -1264,7 +1334,7 @@ server <- function(input, output) {
                                                    maxK = k+1,
                                                    reps=50,
                                                    distance="pearson",
-                                                   clusterAlg="km")[[k]]$consensusTree)
+                                                   clusterAlg="pam")[[k]]$consensusTree)
 
     } else if("Pearson" %in% input$geneClustertype){
       Rowv <- as.dendrogram( hclust( bioDist::cor.dist(x = (as.matrix(ex2)) ) ) )
@@ -1561,7 +1631,12 @@ server <- function(input, output) {
   # Plot heatmaps to screen
   observe({
     if(r$heatmapStoplight == "green"){
-
+      output$ReactiveGenesets <- renderUI({
+        checkboxGroupInput(inputId = "genesets.2",
+                           label = "Select genesets to retain",
+                           choices = c(input$genesets),
+                           selected = c(input$genesets))
+      })
       output$heatmap <- renderPlot({
         #  ------- retrieve data set and clustering results  -------
         x <- getX()
@@ -1584,8 +1659,16 @@ server <- function(input, output) {
                                                       fixed = TRUE))
         }
 
+
+        print("The genesets.2")
+        print(input$genesets.2)
+
+        print("The friendly.filter")
+        print(friendly.filter)
+
         featureSetFilter <- which(names(f$g) %in% friendly.filter)
 
+        print("The featureSet Filter")
         print(featureSetFilter)
 
         genesToPlot <- numeric()
@@ -1621,9 +1704,9 @@ server <- function(input, output) {
         # colorlists <- rep(list(c("gray94", "blue", "green",
         #                          "yellow", "orange", "red","black")),
         #                   length(getSampleTracks()))
-        print("THESE ARE THE SAMPLETRACKS()")
-        print(getSampleTracks())
-        print(" THOSE were the tracks ")
+        # print("THESE ARE THE SAMPLETRACKS()")
+        # print(getSampleTracks())
+        # print(" THOSE were the tracks ")
 
         colorlists = list()
         for(colname in getSampleTracks()){
@@ -1649,6 +1732,7 @@ server <- function(input, output) {
         }
 
         # ------------- plot to screen ---------------------------------------
+        print(x$ex)
         suppressWarnings(
           heatmap.3(x = as.matrix(x$ex)
                     ,Rowv = Rowv
@@ -1830,17 +1914,22 @@ server <- function(input, output) {
                         id.vars = c("SYMBOL","expression") ,
                         variable.names = names(tmp.si))
       #melted.df <- melted.df[complete.cases(melted.df),]
+      # print("df for dotplot")
+      # print(head(melted.df))
+      # print(class(melted.df$value))
       ggplot(data =  melted.df) +
         facet_grid(SYMBOL ~ variable, scales="free") +
-        geom_dotplot(data =  subset(melted.df,is.na(as.numeric(as.character(melted.df$value)))),
+        geom_dotplot(data =  subset(melted.df,
+                                    (is.na(as.numeric(as.character(melted.df$value)))) &
+                                      !is.na(melted.df$value)),
                      aes(x=value,y=expression),
                      binaxis='y',
                      stackdir='center',
-                     dotsize=.5) +
+                     dotsize=.3) +
         geom_point(data = subset(melted.df,!(is.na(as.numeric(as.character(melted.df$value))))),
                    aes(x=as.numeric(as.character(value)),y=expression),
-                   size = 2,
-                   clip = "off") +
+                   size = 2#,clip = "off"
+        ) +
         stat_cor(data = subset(melted.df,!(is.na(as.numeric(as.character(melted.df$value))))),
                  aes(x=as.numeric(as.character(value)),y=expression),
                  method = "spearman",
@@ -1863,16 +1952,17 @@ server <- function(input, output) {
       ggplot(data =  melted.df) +
         facet_grid(SYMBOL ~ variable, scales="free") +
         geom_dotplot(data =  subset(melted.df,
-                                    is.na(as.numeric(as.character(melted.df$value)))),
+                                    (is.na(as.numeric(as.character(melted.df$value)))) &
+                                      !is.na(melted.df$value)),
                      aes(x=value,y=expression, fill = color, color = color),
                      binaxis='y',
                      stackdir='center',
-                     dotsize=.5) +
+                     dotsize=.3) +
         geom_point(data =  subset(melted.df,
                                   !(is.na(as.numeric(as.character(melted.df$value))))),
                    aes(x=as.numeric(as.character(value)),y=expression, color = color),
-                   size = 2,
-                   clip = "off") +
+                   size = 2#,clip = "off"
+        ) +
         theme_pubclean() + theme(axis.text.x = element_text(angle=20,margin = margin(t = 15)))
     }
   })
