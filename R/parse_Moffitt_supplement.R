@@ -138,9 +138,9 @@ parse_Moffitt_supplement <- function() {
              metadata = metadata,
              featInfo = featInfo[which(featInfo$species == "Mm"),])
 
-  saveRDS(Moffitt_S2,
-       file = "./data/Moffitt_S2.rds",
-       compress = T)
+  # saveRDS(Moffitt_S2,
+  #      file = "./data/Moffitt_S2.rds",
+  #      compress = T)
   saveRDS(Moffitt_S2.Hs,
        file = "./data/Moffitt_S2.Hs.rds",
        compress = T)
