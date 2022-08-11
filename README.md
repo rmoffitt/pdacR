@@ -1,24 +1,14 @@
 # pdacR
 
 Find our webtool live [here!](http://pdacR.bmi.stonybrook.edu)
-## Building the package
 
-To build the package locally, clone the repo using:
+## Installing the package
 
+To install the package, simply run
 ```
-git clone https://github.com/rkawalerski/pdacR.git
+devtools::install_github("rmoffitt/pdacR")
 ```
-
-Then install dependencies using `install.dependencies.R` in the `R` directory.
-The package should then be able to be built using your favorite build method.
-
-From command line, in the directory containing your cloned repo:
-```
-R CMD build pdacR
-```
-Or using the RStudio build pane as explained [here](https://support.rstudio.com/hc/en-us/articles/200486488-Developing-Packages-with-RStudio).
-
-Parsed datasets can be found in the `data` directory, with corresponding raw data in `inst/extdata`
+Please note, there are quite a few datasets and substantial raw data within this package, so installation may take some time. Once installed, you can open the app using the function `pdacShiny()`
 
 ## Using the RShiny app (works for both local and web instances)
 
@@ -51,7 +41,7 @@ To visualize gene expression, first select your gene sets of interest from the '
 
 ### Heatmapping and Clustering
 
-After picking your dataset and genes of interest, click the "Select" button to generate the heatmap. You will see that all non-selected genesets disappear, and a heatmap is generated consisting of selected genes. Genes that belong to a particular gene set will be indicated with a black bar to the left of the heatmap. Once you have generated the heatmap, you can deselect certain sets by unchecking the relevant check box. Doing so will remove genes that are unique to that set from the heatmap. This is helpful if you want to look at only the overlap of two gene sets, without cluttering your visualization. 
+After picking your dataset and genes of interest, click the "Generate Heatmap" button to generate the heatmap. You will see that all non-selected genesets disappear, and a heatmap is generated consisting of selected genes. Genes that belong to a particular gene set will be indicated with a black bar to the left of the heatmap. Once you have generated the heatmap, you can deselect certain sets by unchecking the relevant check box. Doing so will remove genes that are unique to that set from the heatmap. This is helpful if you want to look at only the overlap of two gene sets, without cluttering your visualization. 
 
 <img src="images/gene_and_track_selection.png" width="60%"/>
 
@@ -101,6 +91,25 @@ To perform DE, you must pick 1 gene set and 1 "Sample Track". In the top right c
 Dots colored red are members of the geneset you selected (multiple gene set coloration will be provided in a future release). If members of your gene set are significantly differently expressed (regardless of log fold change), they will be labeled on the volcano plot as shown below.
 
 <img src="images/DE_output.png"/>
+
+## Building the package
+
+If you would like to make your own edits to the application locally, first clone the repo using:
+
+```
+git clone https://github.com/rmoffitt/pdacR.git
+```
+
+Then install dependencies using `install.dependencies.R` in the `R` directory.
+The package should then be able to be built using your favorite build method.
+
+From command line, in the directory containing your cloned repo:
+```
+R CMD build pdacR
+```
+Or using the RStudio build pane as explained [here](https://support.rstudio.com/hc/en-us/articles/200486488-Developing-Packages-with-RStudio).
+
+Parsed datasets can be found in the `data` directory, with corresponding raw data in `inst/extdata`
 
 ## Loading New Data (LOCAL ONLY)
 
