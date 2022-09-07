@@ -8,13 +8,13 @@ Description: Downloads and prepares public PDAC data for analysis, and provides 
 License: MIT
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.1
 Suggests: testthat,
           decoderr
 biocViews:
 Imports: Biobase,bioDist,BiocManager,
          ConsensusClusterPlus,
-         decoderr,
+         DESeq2,
          foreign,
          GEOquery,
          ggplot2,
@@ -37,6 +37,7 @@ Imports: Biobase,bioDist,BiocManager,
          scales,
          shiny,
          shinyjs,
+         shinythemes,
          SingleCellExperiment,
          stringi,
          stringr,
