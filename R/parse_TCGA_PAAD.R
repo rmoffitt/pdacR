@@ -248,8 +248,10 @@ parse_TCGA_PAAD <- function() {
                              survivalB = "None",
                              exp.type = "RNAseq",
                              default_selections = list(filter_column = "Filter_by",
-                                                       filter_levels = c("exclude","metastasis",
-                                                                         "normal","pseudonormal"),
+                                                       filter_levels = c("Filter_by:exclude",
+                                                                         "Filter_by:metastasis",
+                                                                         "Filter_by:normal",
+                                                                         "Filter_by:pseudonormal"),
                                                        geneSets = c("Moffitt.Basal.25","Moffitt.Classical.25"),
                                                        sampleTracks = c("ABSOLUTE Purity")))
 

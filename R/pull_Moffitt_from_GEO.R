@@ -98,7 +98,7 @@ pull_Moffitt_from_GEO <- function() {
                    survivalA = "overall survival days",
                    survivalB = "None",
                    default_selections = list(filter_column = "specimen_type",
-                                             filter_levels = "Normal"))
+                                             filter_levels = "specimen_type:Normal"))
 
 
   ## =============================

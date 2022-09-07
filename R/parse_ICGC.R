@@ -81,7 +81,7 @@ parse_ICGC <- function() {
   ## If you want to replicate parsing, download the relevant files from https://dcc.icgc.org/search?filters=%7B%22donor%22:%7B%22availableDataTypes%22:%7B%22is%22:%5B%22exp_seq%22%5D%7D,%22projectId%22:%7B%22is%22:%5B%22PACA-CA%22%5D%7D%7D%7D
   ## Sequencing Based Gene Expression ^
   PACA_CA_exp_seq_fname <- system.file("extdata/ICGC",
-                                       "PACA_CA_new_exp_seq.tsv.gz",
+                                       "PACA_CA_Seq_Updated.tsv.gz",
                                        package = "pdacR")
   PACA_CA_exp_seq <- read.table(gzfile(PACA_CA_exp_seq_fname ),
                                 sep = "\t",

@@ -5,7 +5,11 @@ pull_CPTAC_seq <- function(){
                    data.category = "Transcriptome Profiling",
                    data.type = "Gene Expression Quantification",
                    workflow.type = "STAR - Counts")
-  GDCdownload(query)
+
+  ## Current CPtAC structure causes error in TCGAbiolinks query workflow. Temporary fix reccomended by TCGAbiolinks is to remove duplicates for now. Once TCGAbiolinks is updated, this will be removed.
+  query$results[[1]] <- query$results[[1]][!duplicated(query$results[[1]]$sample.submitter_id),]
+  #GDCdownload(query)
+
   expdat <- GDCprepare(query = query,
                        save = F,
                        summarizedExperiment = F)
@@ -81,19 +85,19 @@ pull_CPTAC_seq <- function(){
                             survivalB = "recurrence-specific survival days",
                             exp.type = "RNAseq",
                             reference = "Cao L et al, Cell, 2021, PMD: 34534465",
-                            description = "179 samples solid tissue samples from 140 patients. 39 are adjacent normal. Of the 140 tumor samples, 105 were cleared as having sufficient cellularity by KRAS VAF",
+                            description = "213 solid tissue samples from 161 patients. 52 are adjacent normal. Of the 161 tumor samples, 105 were cleared as having sufficient cellularity by KRAS VAF",
                             accession = "GDC: CPTAC-3 PDA")
 
   informative = apply(CPTAC_exp$sampInfo,2,FUN = function(x){length(unique(x))>1})
   CPTAC_exp$sampInfo = CPTAC_exp$sampInfo[,informative]
   CPTAC_exp$sampInfo = CPTAC_exp$sampInfo[,
-                                          c(1:3,5:6,8:13,18,21:22,25:27,30:33,37,41:ncol(CPTAC_exp$sampInfo))]
+                                          c(1:3,5:6,8:10,18:19,22:24,28:30,38:ncol(CPTAC_exp$sampInfo))]
 
   ## Add supplementary info from publication
   CPTAC_sampleInfo <- read_excel("inst/extdata/CPTAC/CPTAC_sampleInfo.xlsx", sheet = "Molecular_phenotype_data")
   colnames(CPTAC_sampleInfo)[1] = "submitter_id"
 
-  CPTAC_exp$sampInfo = dplyr::full_join(CPTAC_exp$sampInfo, CPTAC_sampleInfo, by = "submitter_id")
+  CPTAC_exp$sampInfo = dplyr::right_join(CPTAC_exp$sampInfo, CPTAC_sampleInfo, by = "submitter_id")
   CPTAC_exp$sampInfo[which(CPTAC_exp$sampInfo$tissue_type == "Normal"),29:ncol(CPTAC_exp$sampInfo)] = NA
 
   ## Make sure continuous variables are represented as numeric
@@ -111,12 +115,17 @@ pull_CPTAC_seq <- function(){
   CPTAC_exp$sampInfo = CPTAC_exp$sampInfo[,order(colnames(CPTAC_exp$sampInfo))]
   CPTAC_exp$sampInfo = CPTAC_exp$sampInfo[,c(which(colnames(CPTAC_exp$sampInfo) == "submitter_id"),
                                              which(!(colnames(CPTAC_exp$sampInfo) == "submitter_id")))]
+  CPTAC_exp$sampInfo = CPTAC_exp$sampInfo[which(CPTAC_exp$sampInfo$samples %in% colnames(CPTAC_exp$ex)),]
+
+  ## CPTAC has released more seq files, but original supplement covers initial 179 samples. Generate a public version of publication file, save additional for now.
+  CPTAC_exp$ex = CPTAC_exp$ex[,which(colnames(CPTAC_exp$ex) %in% CPTAC_exp$sampInfo$samples)]
 
   ## =============================
   # Generate default filter
   ## =============================
-  CPTAC_exp$metadata$default_selections = list(filter_column = "cellularity_call_from_VAF",
-                                               filter_levels = c("LowPurity"))
+  CPTAC_exp$metadata$default_selections = list(filter_column = c("cellularity_call_from_VAF","sample_type"),
+                                               filter_levels = c("cellularity_call_from_VAF:LowPurity", "sample_type:Solid Tissue Normal"))
+
 
   saveRDS(CPTAC_exp, file = "./data/CPTAC_exp.rds", compress = T)
   return(NULL)

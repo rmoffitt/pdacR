@@ -123,7 +123,7 @@ pull_Seino_from_GEO <- function() {
                    survivalA = "None",
                    survivalB = "None",
                    default_selections = list(filter_column = "cancer_normal",
-                                             filter_levels = c("normal",    "normalLike", "sgRNA-treated")))
+                                             filter_levels = c("cancer_normal:normal",    "cancer_normal:normalLike", "cancer_normal:sgRNA-treated")))
 
   ## =============================
   # Add sample information not in GEO

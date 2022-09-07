@@ -61,7 +61,7 @@ parse_Moffitt_supplement <- function() {
                    survivalB = "None",
                    exp.type = "RNAseq",
                    default_selections = list(filter_column = "sample_type",
-                                             filter_levels = c("CAF"),
+                                             filter_levels = c("sample_type:CAF"),
                                              sampleTracks = c("sample_type")))
 
   ## =============================

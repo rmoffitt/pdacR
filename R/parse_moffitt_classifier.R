@@ -5,7 +5,7 @@
 
 parse_moffitt_classifier <- function(){
 
-  Moffitt_classifier_2015 <- pdacR::MoffittTumorClassifier_Tue_Jun_9_2015_cv.ktsp.500.100
+  Moffitt_classifier_2015 <- MoffittTumorClassifier_Tue_Jun_9_2015_cv.ktsp.500.100
 
   Moffitt_classifier_2019 <- classifs$oct25_equivalent_freeze
 

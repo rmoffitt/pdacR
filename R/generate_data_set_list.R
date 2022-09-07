@@ -31,8 +31,8 @@ generate_data_set_list <- function() {
                      "Seino_GEO_array",
                      "TCGA_PAAD"))
 
-  save(list = c("data_set_list"),
-       file = "./data/data_set_list.RData")
+  saveRDS(data_set_list,
+          file = "./data/data_set_list.rds")
 
   # for(i in data_set_list$variablenames){
   #   writeLines('----------------------------')

@@ -206,8 +206,8 @@ pull_Chen_from_GEO <- function() {
                          ex=ex,
                          metadata=metadata)
   Chen_GEO_array$sampInfo = Chen_GEO_array$sampInfo[,order(colnames(Chen_GEO_array$sampInfo))]
-  Chen_GEO_array$sampInfo = Chen_GEO_array$sampInfo[,c(which(colnames(sampInfo)=="submitted_sample_id"),
-                                                       which(colnames(sampInfo)!="submitted_sample_id"))]
+  Chen_GEO_array$sampInfo = Chen_GEO_array$sampInfo[,c(which(colnames(Chen_GEO_array$sampInfo)=="submitted_sample_id"),
+                                                       which(colnames(Chen_GEO_array$sampInfo)!="submitted_sample_id"))]
 
   saveRDS(Chen_GEO_array,
           file = "./data/Chen_GEO_array.rds",

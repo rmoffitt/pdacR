@@ -5,8 +5,8 @@
 #' @import openxlsx
 
 parse_gene_lists <- function() {
-   library(org.Hs.eg.db)
-   library(openxlsx)
+  library(org.Hs.eg.db)
+  library(openxlsx)
   gene_lists <- list()
 
   ## =============================
@@ -52,8 +52,8 @@ parse_gene_lists <- function() {
   gene_lists$Puleo.Centroids <- data.frame(
     symbols = Puleo_centroids[,1],
     type = apply(X = Puleo_centroids[,-1],
-                MARGIN = 1,
-                FUN = function(x){ names(x)[which.max(x)] })
+                 MARGIN = 1,
+                 FUN = function(x){ names(x)[which.max(x)] })
   )
   write.table(x = gene_lists$Puleo.Centroids,
               file = "./data/Puleo_readable_list.tsv",
@@ -130,16 +130,24 @@ parse_gene_lists <- function() {
     if((x %in% A) & !(x %in% I) & !(x %in% S) & !(x %in% P) ){return("ADEX")}
     if(!(x %in% A) & (x %in% I) & !(x %in% S) & !(x %in% P) ){return("Immunogenic")}
     if(!(x %in% A) & !(x %in% I) & (x %in% S) & !(x %in% P) ){return("Squamous")}
-    if(!(x %in% A) & !(x %in% I) & !(x %in% S) & (x %in% P) ){return("Pancreatic progenitor")}
+    if(!(x %in% A) & !(x %in% I) & !(x %in% S) & (x %in% P) ){return("Progenitor")}
     return("not unique")
   }
   gene_lists$ICGC.SAM <- data.frame(symbols = ICGC_SAM[,2],
                                     type = sapply(X = ICGC_SAM[,2],
-                                                  FUN = function(x){checkICGC(x,gene_lists$ICGC.ADEX.Up,
+                                                  FUN = function(x){checkICGC(x,
+                                                                              gene_lists$ICGC.ADEX.Up,
                                                                               gene_lists$ICGC.Immunogenic.Up ,
                                                                               gene_lists$ICGC.Squamous.Up ,
                                                                               gene_lists$ICGC.Progenitor.Up )})
   )
+
+  # --------------------------
+  for(i in c("ADEX","Immunogenic","Squamous","Progenitor")){
+    shortlist = gene_lists$ICGC.SAM$symbols[gene_lists$ICGC.SAM$type == i]
+    gene_lists[[paste("ICGC",i,"Up.unique",sep = ".")]] <- intersect(gene_lists[[paste("ICGC",i,"Up",sep = ".")]],shortlist) ## Parse down to Unique Up
+    gene_lists[[paste("ICGC",i,"Down.unique",sep = ".")]] <- intersect(gene_lists[[paste("ICGC",i,"Down",sep = ".")]],shortlist) ## Parse down to Unique Down
+  }
   write.table(x = gene_lists$ICGC.SAM,
               file = "./data/Bailey_readable_list.tsv",
               sep ="\t",
@@ -151,9 +159,9 @@ parse_gene_lists <- function() {
   ## =============================
   tmpFname <- system.file("extdata/gene_lists", "Scarpa_PanNET_genes.txt", package = "pdacR")
   Scarpa_PanNET <- read.table(file = tmpFname,
-                          sep = "\t",
-                          header = FALSE,
-                          skip = 0)
+                              sep = "\t",
+                              header = FALSE,
+                              skip = 0)
   gene_lists$Scarpa_PanNET <- Scarpa_PanNET[[1]]
 
 
@@ -199,7 +207,7 @@ parse_gene_lists <- function() {
   }
 
   ## =============================
-  # from Newman et al, Nature Methods, 2015
+  # CIBERSORT from Newman et al, Nature Methods, 2015
   ## =============================
   tmpFname <- system.file("extdata/gene_lists", "cibersort.tsv", package = "pdacR")
   cibersort <- read.table(file = tmpFname,
@@ -213,24 +221,24 @@ parse_gene_lists <- function() {
   }
 
   ## =============================
-  # from Chan-Seng-Yue et al, Nature Genetics, 2019
+  # from Chan_Seng_Yue et al, Nature Genetics, 2019
   ## =============================
   tmpFname <- system.file("extdata/gene_lists", "Notta_supplement.xlsx", package = "pdacR")
   Chan_Seng_Yue <- read.xlsx(tmpFname,
-                     sheet = "Supplementary Table 4",
-                     startRow = 2)
-  Chan-Seng-Yue = Chan-Seng-Yue[,c("Sig..2.genes","Sig..10.genes","Sig..1.genes","Sig..6.genes")]
-  names(Chan-Seng-Yue) = c("BasalA","BasalB","ClassicalA","ClassicalB")
+                             sheet = "Supplementary Table 4",
+                             startRow = 2)
+  Chan_Seng_Yue = Chan_Seng_Yue[,c("Sig..2.genes","Sig..10.genes","Sig..1.genes","Sig..6.genes")]
+  names(Chan_Seng_Yue) = c("BasalA","BasalB","ClassicalA","ClassicalB")
 
-  for(i in 1:ncol(Chan-Seng-Yue)){
-    gene_lists[[paste0("Chan-Seng-Yue.",names(Chan-Seng-Yue)[i])]] <- as.character(na.omit(Chan-Seng-Yue[,i]))
+  for(i in 1:ncol(Chan_Seng_Yue)){
+    gene_lists[[paste0("Chan_Seng_Yue.",names(Chan_Seng_Yue)[i])]] <- as.character(na.omit(Chan_Seng_Yue[,i]))
   }
 
   ## =============================
   # Save gene lists
   ## =============================
   print(summary(gene_lists))
-  save(list = c("gene_lists"),
-       file = "./data/gene_lists.RData")
+  saveRDS(gene_lists,
+          file = "./data/gene_lists.rds")
   return(NULL)
 }
