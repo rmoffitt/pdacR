@@ -1213,7 +1213,7 @@ server <- function(input, output) {
       tmp.info = c(tmp.info, implement_PAMG(x))
 
       ## Bin purIST outputs
-      tmpInfo$purIST_2019_Call = factor(ifelse(tmpInfo$puRIST_2019 >= .5,"Basal-like","Classical"))
+      tmp.info$purIST_2019_Call = factor(ifelse(tmp.info$puRIST_2019 >= .5,"Basal-like","Classical"))
       return(tmp.info)
     }
   })
