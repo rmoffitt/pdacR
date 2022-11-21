@@ -201,6 +201,7 @@ server <- function(input, output) {
   observeEvent(input$bigTab, {
     choice = input$bigTab
     if(choice == "Heatmap"){
+      shinyjs::runjs("document.getElementById('GeneSelection').style.visibility = 'visible';")
       observeEvent(input$GeneSelection, {
         shinyjs::runjs("document.getElementById('GeneSelection').style.visibility = 'hidden';")
         shinyjs::runjs("document.getElementById('reset1').style.visibility = 'visible';")
