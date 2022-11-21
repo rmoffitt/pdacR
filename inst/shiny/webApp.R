@@ -500,6 +500,7 @@ server <- function(input, output) {
                                              "Expression.signature.2",
                                              "Expression.signature.3",
                                              as.character(globals$classifier_list$labels),
+                                             "purIST_2019_Call",
                                              "molgrad_PDX",
                                              "molgrad_Puleo",
                                              "molgrad_ICGCarray",
@@ -520,6 +521,7 @@ server <- function(input, output) {
                                              "Expression.signature.2",
                                              "Expression.signature.3",
                                              as.character(globals$classifier_list$labels),
+                                             "purIST_2019_Call",
                                              "molgrad_PDX",
                                              "molgrad_Puleo",
                                              "molgrad_ICGCarray",
@@ -1205,6 +1207,10 @@ server <- function(input, output) {
       }
       ## Add PAMG to classifier obj
       tmp.info = c(tmp.info, implement_PAMG(x))
+
+      ## Bin purIST outputs
+      tmp.info$purIST_2019_Call = factor(ifelse(tmp.info$puRIST_2019 >= .5,"Basal-like","Classical"))
+
       return(tmp.info)
     }
   })
