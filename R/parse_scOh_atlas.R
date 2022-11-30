@@ -7,7 +7,7 @@
 
 parse_scOh_atlas <- function(){
   ## Won't be available as is, here for transparency and posterity
-  atlas <- readRDS("/premDisk/khoh/Github/scTME/data/pdac_full_combined.rds")
+  atlas <- readRDS("/premDisk/khoh/Github/misc/data/pdac_full_combined.rds")
   atlas@meta.data = atlas@meta.data[,which(colnames(atlas@meta.data) %in%
                                              c("Patient",
                                                "Dataset")
@@ -18,14 +18,15 @@ parse_scOh_atlas <- function(){
   tmp_converted$metadata$log.transformed = FALSE
   rownames(tmp_converted$sampInfo) = NULL
 
-  SupplementaryTable4Metadata <- read_excel("inst/extdata/scAtlas/SupplementaryTable4Metadata.xlsx")
+  SupplementaryTable4Metadata <- read_excel("./inst/extdata/scAtlas/SupplementaryTable4Metadata.xlsx")
+  SupplementaryTable4Metadata  = SupplementaryTable4Metadata[,c("Patient","Condition","Note")]
 
   tmp_converted$sampInfo = dplyr::left_join(tmp_converted$sampInfo, SupplementaryTable4Metadata, by = "Patient")
   tmp_converted$sampInfo = tmp_converted$sampInfo[,order(colnames(tmp_converted$sampInfo))]
   tmp_converted$sampInfo = tmp_converted$sampInfo[,c(which(colnames(tmp_converted$sampInfo) == "Patient"),
                                                      which(colnames(tmp_converted$sampInfo) != "Patient"))]
   tmp_converted$metadata$default_selections = list(filter_column = "Condition",
-                                                   filter_levels = "Normal",
+                                                   filter_levels = "Condition:Normal",
                                                    sampleTracks = "Dataset")
   saveRDS(tmp_converted,
           file = "./data/scAtlas.pseudobulked.rds",

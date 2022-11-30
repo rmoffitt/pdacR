@@ -230,10 +230,10 @@ parse_Puleo_Array <- function() {
   movetonumeric <- numeric()
   for(i in 1:ncol(sampInfo)){
     tmp_name = colnames(sampInfo)[i]
-    if(tmp_name %in% c("WholeTumorClass","HighTumorCellClass")){
+    if(tmp_name %in% c("WholeTumorClass","HighTumorCellClass","Sample.name","Array.file")){
       print(NULL)
     }
-    else if(is.character(sampInfo[,i])){
+    else if((is.character(sampInfo[,i]) & (length(levels(as.factor(sampInfo[,i]))) > 80))){
       movetonumeric <- c(movetonumeric, i)
     }
   }

@@ -204,9 +204,9 @@ pull_Olive_from_GEO <- function() {
                    description = "66 matched laser-capture-dissected stroma and epithelium samples, with a subset of triplicate bulk, stroma, epithelium matches and 57 additional unmatched stroma",
                    survivalA = "None",
                    survivalB = "None",
-                   default_selections = list(filter_column = "Histological_diagnosis",
-                                             filter_levels = c("IPMN_carcinoma"),
-                                             sampleTracks = c("Features_Of_Possible_Concomittant_IPMN")))
+                   default_selections = list(filter_column = "TissueType",
+                                             filter_levels = c("TissueType:stroma"),
+                                             sampleTracks = c("Features_Of_Possible_Concomittant_IPMN","TissueType")))
 
   dataset <- list(ex_v2,
                   sampInfo_v3,

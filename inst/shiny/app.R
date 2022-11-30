@@ -20,6 +20,7 @@ library(survminer)
 library(scales)
 #library(umapr)
 library(DESeq2)
+library(Cairo)
 
 
 print(sessionInfo())
@@ -200,6 +201,7 @@ server <- function(input, output) {
   observeEvent(input$bigTab, {
     choice = input$bigTab
     if(choice == "Heatmap"){
+      shinyjs::runjs("document.getElementById('GeneSelection').style.visibility = 'visible';")
       observeEvent(input$GeneSelection, {
         shinyjs::runjs("document.getElementById('GeneSelection').style.visibility = 'hidden';")
         shinyjs::runjs("document.getElementById('reset1').style.visibility = 'visible';")
@@ -238,7 +240,8 @@ server <- function(input, output) {
 
   output$ReactiveGenesets <- renderUI({
     meta = dataSet()$meta
-    if(exists("geneSets", where = meta$default_selections)){
+    if(exists("default_selections", where = meta) &&
+       exists("geneSets", where = meta$default_selections)){
       checkboxGroupInput(inputId = "genesets",
                          label = "",
                          choices = c("Most Variable 100",
@@ -466,8 +469,7 @@ server <- function(input, output) {
         checkboxGroupInput(inputId = "sampleFilterSpecifics",
                            label = "Select to Remove",
                            choices = possibleTracks,
-                           selected = paste0(meta$default_selections$filter_column, ":",
-                                             meta$default_selections$filter_levels))
+                           selected = meta$default_selections$filter_levels)
       } else {
         # print("Filter options are")
         # print(possibleTracks)
@@ -488,8 +490,8 @@ server <- function(input, output) {
   output$ReactiveSampleTracks <- renderUI({
     meta = dataSet()$metadata
     possibleTracks <- names(dataSet()$sampInfo)
-    if(exists("sampleTracks", where = meta$default_selections)){
-      print((paste0("Default tracks: ", meta$default_selections$sampleTracks)))
+    if(exists("default_selections", where = meta) &&
+       exists("sampleTracks", where = meta$default_selections)){
       checkboxGroupInput(inputId = "sampleTracks",
                          label = "Sample Tracks",
                          choices =  gsub(pattern = ".",
@@ -500,6 +502,7 @@ server <- function(input, output) {
                                              "Expression.signature.2",
                                              "Expression.signature.3",
                                              as.character(globals$classifier_list$labels),
+                                             "purIST_2019_Call",
                                              "molgrad_PDX",
                                              "molgrad_Puleo",
                                              "molgrad_ICGCarray",
@@ -520,6 +523,7 @@ server <- function(input, output) {
                                              "Expression.signature.2",
                                              "Expression.signature.3",
                                              as.character(globals$classifier_list$labels),
+                                             "purIST_2019_Call",
                                              "molgrad_PDX",
                                              "molgrad_Puleo",
                                              "molgrad_ICGCarray",
@@ -924,10 +928,11 @@ server <- function(input, output) {
                   fixed = TRUE)
       set <- globals$gene_lists[names(globals$gene_lists) == set]
       set <- set[[1]]
+      print(set)
     }
 
     globals$genes2color = NULL
-    for (i in rownames(globals$res)){
+    for (i in globals$res$labels){
       if (i %in% set){
         print(paste(i, "is present"))
         globals$genes2color[i] <- i
@@ -978,7 +983,7 @@ server <- function(input, output) {
       x <- mergeDataSets(x,y)
     }
     if(object.size(x)<(10^8.5)){
-      x$ex <- preprocessCore::normalize.quantiles(as.matrix(x$ex))
+      x$ex <- limma::normalizeQuantiles(as.matrix(x$ex))
     }
     return(x)
   })
@@ -1207,6 +1212,9 @@ server <- function(input, output) {
       }
       ## Add PAMG to classifier obj
       tmp.info = c(tmp.info, implement_PAMG(x))
+
+      ## Bin purIST outputs
+      tmp.info$purIST_2019_Call = factor(ifelse(tmp.info$puRIST_2019 >= .5,"Basal-like","Classical"))
       return(tmp.info)
     }
   })
