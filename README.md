@@ -1,5 +1,7 @@
 # pdacR
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7383375.svg)](https://doi.org/10.5281/zenodo.7383375)
+
 Find our webtool live [here!](http://pdacR.bmi.stonybrook.edu)
 
 ## Repository layout
