@@ -711,12 +711,12 @@ server <- function(input, output) {
   observeEvent(input$Species, {
     this.species <- isolate(input$Species)
     if(this.species == "Mouse"){
-      globals$data_set_list <- pdacR::mouse_data_set_list
+      globals$data_set_list <- readRDS(paste0(dataLocation,"/mouse_data_set_list.rds"))
       globals$gene_lists <- pdacR::mouse_gene_lists
       globals$classifier_list = NULL
     }
     else if (this.species == "Human"){
-      globals$data_set_list = pdacR::data_set_list
+      globals$data_set_list = readRDS(paste0(dataLocation,"/data_set_list.rds"))
       globals$gene_lists = pdacR::gene_lists
       globals$classifier_list = pdacR::classifier_list
     }
@@ -956,9 +956,10 @@ server <- function(input, output) {
     )
     x <- NULL
     for(selectedset in input$dataset){
-      print(dataLocation)
       selectedvariable <- globals$data_set_list$variablenames[globals$data_set_list$labels %in% selectedset]
-      filename = paste0(dataLocation,"/",selectedvariable,".rds")
+      selectedPackage <- globals$data_set_list$package[globals$data_set_list$labels %in% selectedset]
+      packageLocation = system.file("data", package = selectedPackage)
+      filename = paste0(packageLocation,"/",selectedvariable,".rds")
       y = readRDS(file = filename)
       y$sampInfo$source <- selectedset
       do.a.log.transform = TRUE # the default behavior
