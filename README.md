@@ -6,7 +6,7 @@ Find our webtool live [here!](http://pdacR.bmi.stonybrook.edu)
 
 ## Repository layout
 
-* Data/ holds all parsed datasets, as well as the gene signatures object and PurIST classifier object. These datasets are used both in the app and in the associated publication (link and citation forthcoming with publication).
+* Data/ holds all parsed datasets, as well as the gene signatures object and PurIST classifier object. These datasets are used both in the app and in the [associated publication Torre-Healy et al. 2023](https://www.nature.com/articles/s42003-023-04461-6).
 * R/ holds all wrapper functions used in the application
 * inst/analysis holds all preliminary analytical files and will hold a singular file used for generation of paper figures
 * inst/shiny holds the code for execution of the app (and a similar version called webApp used for web-based dataset loading)
