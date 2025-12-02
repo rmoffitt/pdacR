@@ -23,7 +23,7 @@ Please note, there are quite a few datasets and substantial raw data within this
 ## Using the RShiny app (works for both local and web instances)
 
 To host a local instance of the app, run `pdacR::pdacShiny()`
-To use a web instance, navigate to http://pdacr.bmi.stonybrook.edu/pdac
+To use a web instance, navigate to http://pdacr.bmi.emory.edu/pdac
 
 ### The Big Buttons
 
@@ -146,7 +146,7 @@ Private data packages _**must have been built and installed**_ to their local in
 ## Contributions
 
 We welcome community investigators to issue pull requests or open issues to help improve the functionality of this tool for PDAC data centralization and ease of use.
-Inquiries can be sent to richard.moffitt @ stonybrookmedicine.edu
+Inquiries can be sent to richard.austin.moffitt @ emory.edu
 
 ## More information
 More information on pdacR and its Shiny app can be found here:
